@@ -56,6 +56,7 @@ CI:
 ## Standards Included
 - `Memory-bank/coding-security-standards.md`
 - `Memory-bank/tools-and-commands.md`
+- `Memory-bank/project-details.md` for active plan/feature tracking
 - `Memory-bank/mastermind.md` for options, debate, vote, final ruling
 
 ## Notes

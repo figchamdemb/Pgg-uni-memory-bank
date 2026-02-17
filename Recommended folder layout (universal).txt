@@ -2,6 +2,7 @@
 Memory-bank/
   README.md
   project-spec.md
+  project-details.md
   structure-and-db.md
   tools-and-commands.md
   coding-security-standards.md

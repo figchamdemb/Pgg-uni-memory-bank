@@ -13,6 +13,7 @@ This guide is reusable for:
 
 ## What must exist in every new project
 1. `Memory-bank/` (the durable docs)
+   - include `project-details.md`
    - include `tools-and-commands.md`
    - include `coding-security-standards.md`
 2. `AGENTS.md` (agent behavior contract)

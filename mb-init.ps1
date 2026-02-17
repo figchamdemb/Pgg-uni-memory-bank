@@ -108,11 +108,12 @@ This repository requires `Memory-bank/` updates for every coding session.
 1. Read `Memory-bank/daily/LATEST.md`.
 2. Read the latest daily report referenced there.
 3. Read `Memory-bank/project-spec.md`.
-4. Read `Memory-bank/structure-and-db.md`.
-5. Read recent entries in `Memory-bank/agentsGlobal-memory.md`.
-6. Read `Memory-bank/tools-and-commands.md` (runtime/tool/start commands).
-7. Read `Memory-bank/coding-security-standards.md`.
-8. Check `Memory-bank/mastermind.md` for open decisions.
+4. Read `Memory-bank/project-details.md`.
+5. Read `Memory-bank/structure-and-db.md`.
+6. Read recent entries in `Memory-bank/agentsGlobal-memory.md`.
+7. Read `Memory-bank/tools-and-commands.md` (runtime/tool/start commands).
+8. Read `Memory-bank/coding-security-standards.md`.
+9. Check `Memory-bank/mastermind.md` for open decisions.
 
 ## Mandatory End Protocol (before final summary to user)
 If code changed:
@@ -120,6 +121,7 @@ If code changed:
    - `Memory-bank/structure-and-db.md`
    - `Memory-bank/db-schema/*.md` when schema/migration changed
    - `Memory-bank/code-tree/*-tree.md` when structure changed
+   - `Memory-bank/project-details.md` when scope/plan/features changed
    - `Memory-bank/tools-and-commands.md` when runtime/tool/start commands changed
 2. Append one entry to `Memory-bank/agentsGlobal-memory.md`.
 3. Update `Memory-bank/daily/__TODAY__.md`.
@@ -156,21 +158,62 @@ It reduces context loss, improves handover quality, and keeps code/documentation
 
 ## Source-of-Truth Order
 1. `project-spec.md`
-2. `structure-and-db.md`
-3. `db-schema/*.md`
-4. `code-tree/*.md`
-5. `tools-and-commands.md`
-6. `coding-security-standards.md`
-7. `agentsGlobal-memory.md`
-8. `mastermind.md`
-9. `daily/*.md` (derived convenience reports)
+2. `project-details.md`
+3. `structure-and-db.md`
+4. `db-schema/*.md`
+5. `code-tree/*.md`
+6. `tools-and-commands.md`
+7. `coding-security-standards.md`
+8. `agentsGlobal-memory.md`
+9. `mastermind.md`
+10. `daily/*.md` (derived convenience reports)
 
 ## Non-Negotiables
 - No secrets in Memory-bank.
+- If plan/scope/features change, update `project-details.md`.
 - If code structure changes, update `structure-and-db.md` and relevant `code-tree/*.md`.
 - If DB/migrations change, update `db-schema/*.md` and `structure-and-db.md`.
 - If tools/runtime/start commands change, update `tools-and-commands.md`.
 - Keep docs concise and current.
+'@
+
+$projectDetailsTemplate = @'
+# Project Details - Scope, Plan, Feature Status
+
+LAST_UPDATED_UTC: __NOW_UTC__
+UPDATED_BY: mb-init
+
+## Purpose
+Track execution-level project details that change over time:
+- active plan
+- planned features
+- in-progress work
+- completed milestones
+
+This file is the operational bridge between product intent and implementation.
+
+## Current Plan (Rolling)
+| Plan Item | Status | Owner | Target Date | Notes |
+|---|---|---|---|---|
+| Initialize Memory-bank standards | Done | Platform | __TODAY__ | Bootstrapped |
+| Fill project-specific plan | Planned | Team | <date> | |
+
+## Feature Backlog Snapshot
+| Feature | Priority | Status | Components | Decision Link |
+|---|---|---|---|---|
+| <feature-name> | High/Med/Low | Planned/In Progress/Done | <services/apps> | mastermind.md |
+
+## Change Triggers (Mandatory Updates)
+Update this file whenever:
+- a new feature is approved
+- a plan item status changes
+- scope changes (in/out)
+- milestone dates shift materially
+
+## Next Planning Review
+- Date:
+- Owners:
+- Open risks:
 '@
 
 $toolsTemplate = @'
@@ -426,6 +469,7 @@ LAST_UPDATED_UTC: __NOW_UTC__
 
 ## Documentation Updated
 - [x] project-spec.md
+- [x] project-details.md
 - [x] structure-and-db.md
 - [x] tools-and-commands.md
 - [x] coding-security-standards.md
@@ -682,6 +726,12 @@ def main() -> int:
         errors.append(f"Missing staged update: Memory-bank/daily/{today}.md")
     if "Memory-bank/daily/LATEST.md" not in staged:
         errors.append("Missing staged update: Memory-bank/daily/LATEST.md")
+
+    if "Memory-bank/project-details.md" not in staged:
+        errors.append(
+            "Missing staged update: Memory-bank/project-details.md "
+            "(track plan/feature status or note 'no plan changes')."
+        )
 
     if tooling_changes and "Memory-bank/tools-and-commands.md" not in staged:
         errors.append("Tooling/runtime/start-command changes detected but Memory-bank/tools-and-commands.md is not staged.")
@@ -1084,6 +1134,7 @@ jobs:
           mb_changed = any(p.startswith("Memory-bank/") for p in changed)
           db_doc_changed = any(p.startswith("Memory-bank/db-schema/") and p.endswith(".md") for p in changed)
           tools_doc_changed = "Memory-bank/tools-and-commands.md" in changed
+          project_details_changed = "Memory-bank/project-details.md" in changed
           agents_log_changed = "Memory-bank/agentsGlobal-memory.md" in changed
           latest_changed = "Memory-bank/daily/LATEST.md" in changed
 
@@ -1119,6 +1170,8 @@ jobs:
             missing.append("migration changed but Memory-bank/db-schema/*.md was not updated")
           if tooling_changed and not tools_doc_changed:
             missing.append("tooling/runtime/start commands changed but Memory-bank/tools-and-commands.md was not updated")
+          if code_changed and not project_details_changed:
+            missing.append("project-details.md not updated (required for active plan/feature tracking)")
           if code_changed and not agents_log_changed:
             missing.append("agentsGlobal-memory.md was not updated")
           if code_changed and not latest_changed:
@@ -1147,6 +1200,7 @@ $files = @(
     @{ Path = "AGENTS.md"; Content = $agentsTemplate; LfOnly = $false },
     @{ Path = "Memory-bank\README.md"; Content = $mbReadmeTemplate; LfOnly = $false },
     @{ Path = "Memory-bank\project-spec.md"; Content = $projectSpecTemplate; LfOnly = $false },
+    @{ Path = "Memory-bank\project-details.md"; Content = $projectDetailsTemplate; LfOnly = $false },
     @{ Path = "Memory-bank\structure-and-db.md"; Content = $structureTemplate; LfOnly = $false },
     @{ Path = "Memory-bank\tools-and-commands.md"; Content = $toolsTemplate; LfOnly = $false },
     @{ Path = "Memory-bank\coding-security-standards.md"; Content = $standardsTemplate; LfOnly = $false },
