@@ -1,0 +1,489 @@
+1) Recommended folder layout (universal)
+Memory-bank/
+  README.md
+  project-spec.md
+  structure-and-db.md
+  tools-and-commands.md
+  coding-security-standards.md
+  agentsGlobal-memory.md
+  mastermind.md
+  daily/
+    LATEST.md
+    YYYY-MM-DD.md
+  db-schema/
+    _TEMPLATE-schema.md
+    <schema-name>.md
+  code-tree/
+    _TEMPLATE-service-tree.md
+    <service-or-app-name>-tree.md
+
+
+Notes:
+
+Keep daily reports for 7–14 latest working days. Delete older ones.
+
+Do not store secrets in Memory-bank. Use .env / vault and reference keys by name.
+
+2) Memory-bank/README.md (the enforcement contract)
+# Memory-bank — Universal Standard (Enterprise)
+
+LAST_UPDATED_UTC: YYYY-MM-DD HH:MM
+OWNER: <team or person>
+
+## Purpose
+Memory-bank is the durable project memory layer for humans + AI agents.
+It exists to:
+- eliminate "context loss" across sessions
+- reduce hallucination by forcing grounding
+- enable multi-agent handover with auditability
+- enforce enterprise-grade coding and documentation discipline
+
+## Documents (Source of Truth Order)
+1) project-spec.md (system intent and flows)
+2) structure-and-db.md (authoritative snapshot index)
+3) db-schema/*.md (full DB detail, per schema)
+4) code-tree/*.md (service/app deep trees)
+5) agentsGlobal-memory.md (append-only change log)
+6) mastermind.md (decisions and peer verification)
+7) daily/*.md (derived end-of-day summaries; convenience only)
+
+IMPORTANT:
+- Daily reports are convenience artifacts; they must not contradict authoritative docs.
+
+## Non-Negotiables
+- NO secrets in Memory-bank (no API keys, passwords, private URLs).
+- Append-only where specified (agentsGlobal-memory.md, mastermind.md, daily reports).
+- Any structural/schema change MUST be reflected in the snapshot and relevant detail docs.
+- Enterprise-grade code only: maintainable, modular, minimal duplication, testable.
+- Avoid monolithic files:
+  - Frontend screens should typically stay under ~300–700 lines per file.
+  - Backend classes/services should typically stay under ~300–600 lines per file.
+  - If a file grows, refactor into modules/components/helpers.
+- Any agent must follow the Start/End Protocol.
+
+## Start-of-Session Protocol (Mandatory)
+1) Read `daily/LATEST.md` and the referenced latest daily report.
+2) Read `project-spec.md` sections relevant to the task.
+3) Read `structure-and-db.md` relevant sections.
+4) Read last 3–5 entries in `agentsGlobal-memory.md`.
+5) Check `mastermind.md` for any open decisions relevant to the task.
+6) Only then propose or implement changes.
+
+## End-of-Session Protocol (Mandatory)
+If code changed:
+1) Update snapshot docs:
+   - structure-and-db.md (if structure/schema summary changed)
+   - db-schema/<schema>.md (if DB changed)
+   - code-tree/<service>-tree.md (if structure changed)
+2) Append one entry to agentsGlobal-memory.md (delta log).
+3) If a decision/tradeoff occurred: record it in mastermind.md (with reviewer slots).
+4) Update today's daily report in `daily/YYYY-MM-DD.md`.
+5) Update `daily/LATEST.md` to point to today's report.
+
+If no code changed (research/planning only):
+- Update mastermind.md or daily report (optional) and explicitly state "no code changes".
+
+## Compliance Checklist (Agent must explicitly confirm)
+- [ ] I read daily/LATEST.md and latest report
+- [ ] I grounded changes in project-spec.md and structure-and-db.md
+- [ ] I updated the correct docs for any structure/schema changes
+- [ ] I appended an agentsGlobal entry for code changes
+- [ ] I recorded decisions in mastermind.md when applicable
+- [ ] I updated daily report and LATEST pointer
+
+3) Memory-bank/project-spec.md (intent + flows)
+# Project Spec — Intent, Actors, Flows
+
+LAST_UPDATED_UTC: YYYY-MM-DD HH:MM
+UPDATED_BY: <agent/model or human>
+
+## Purpose
+Defines WHAT the system does (intent) and WHY (business rules).
+This file avoids implementation details (no code dumps, no full DB schemas).
+Authoritative structure and DB details live elsewhere.
+
+## Scope
+- In-scope:
+- Out-of-scope:
+
+## Actors / Roles
+| Actor | Capabilities | Notes |
+|---|---|---|
+| Citizen | ... | |
+| Admin | ... | |
+| Agent | ... | |
+
+## Core Domain Concepts (Glossary)
+| Term | Definition |
+|---|---|
+| KYC | ... |
+| Verification | ... |
+
+## Core Flows (Step-by-step)
+### Flow 1: <Name>
+1) ...
+2) ...
+Expected outcomes:
+- ...
+
+### Flow 2: <Name>
+1) ...
+2) ...
+Expected outcomes:
+- ...
+
+## Business Rules / Invariants
+- Rule:
+- Rule:
+
+## Non-Functional Requirements
+- Security:
+- Performance:
+- Auditability:
+- Availability:
+
+## Update Instructions (STRICT)
+Update this file only when:
+- product behavior changes
+- rules change
+- new flow is introduced
+Then reflect implications in structure/db docs if needed.
+
+STOP CONDITION:
+If system behavior was changed in code but this spec is not updated, work is incomplete.
+
+4) Memory-bank/structure-and-db.md (authoritative snapshot index)
+# Structure & DB — Authoritative Snapshot (Index)
+
+LAST_UPDATED_UTC: YYYY-MM-DD HH:MM
+UPDATED_BY: <agent/model or human>
+
+## Purpose
+This is the authoritative snapshot of:
+- service/app/module inventory
+- high-level folder structure
+- DB schemas and table index (not full columns for every table)
+Full details are in:
+- db-schema/*.md
+- code-tree/*.md
+
+## Non-Negotiables
+- No secrets.
+- Keep it readable. Do not paste huge dumps here.
+- If you change structure/schema summary, update this file and the corresponding detail file.
+
+## System Inventory
+| Component | Type | Responsibility | Tech | Detail Doc |
+|---|---|---|---|---|
+| citizen-service | microservice | ... | Java/Spring | code-tree/citizen-service-tree.md |
+| citizen-app | app | ... | RN/Next | code-tree/citizen-app-tree.md |
+
+## High-Level Data Flow
+- Client -> API -> Service -> DB -> Notifications (example)
+
+## Schemas (Index Only)
+| Schema | Owned By | Tables Count | Detail Doc |
+|---|---|---:|---|
+| citizen | citizen-service | 24 | db-schema/citizen.md |
+| verification | verification-service | 18 | db-schema/verification.md |
+
+## Migrations / Versioning (Summary)
+- citizen schema latest Flyway: V__...
+- verification schema latest Flyway: V__...
+
+## Update Instructions (STRICT)
+When code changes:
+1) If structure changed: update relevant code-tree/*.md and update inventory here.
+2) If DB changed: update db-schema/*.md and update schema index here.
+3) Then update agentsGlobal-memory.md and daily report.
+
+STOP CONDITION:
+Structural or schema changes without updates here are incomplete work.
+
+5) Memory-bank/agentsGlobal-memory.md (append-only delta log)
+# Agents Global Memory — Change Log (Append-Only)
+
+LAST_UPDATED_UTC: YYYY-MM-DD HH:MM
+UPDATED_BY: <agent/model or human>
+
+## Purpose
+Append-only delta log:
+- What changed
+- Why
+- Where to review (paths + symbols + migrations)
+Authoritative snapshots are elsewhere.
+
+## Rules (STRICT)
+- Append-only; never rewrite history.
+- No secrets.
+- Summary <= 150 words per entry.
+- Use stable anchors: file path + symbol/migration/heading.
+- Line numbers optional; never the primary anchor.
+
+---
+
+## ENTRY TEMPLATE
+### [YYYY-MM-DD HH:MM UTC] — <AGENT_NAME / MODEL>
+Scope:
+- Components:
+- Files touched:
+
+Summary (<=150 words):
+- What changed:
+- Why:
+- Impact:
+
+Anchors / Pointers:
+- Path:
+- Symbol(s):
+- Migration(s):
+- Doc updates made: (structure/db/code-tree/mastermind/daily)
+
+Follow-ups:
+- TODO:
+- Risks/Notes:
+
+6) Memory-bank/mastermind.md (decisions + verification)
+# Mastermind — Decisions & Verification (Append-Only)
+
+LAST_UPDATED_UTC: YYYY-MM-DD HH:MM
+UPDATED_BY: <agent/model or human>
+
+## Purpose
+Records design decisions + peer verification.
+Not a changelog.
+
+## Rules
+- Append-only.
+- No secrets.
+- Reviewer notes <= 200 words each.
+- Every decision must include risks + mitigation.
+
+---
+
+## DECISION TEMPLATE
+### Topic: <Short Title>
+Date_UTC: YYYY-MM-DD
+Owner: <human or agent>
+
+Context:
+- What problem are we solving?
+
+Options Considered:
+1) ...
+2) ...
+3) ...
+
+Decision:
+- Chosen option:
+
+Rationale:
+- Why this is best:
+
+Risks:
+- Risk:
+- Mitigation:
+
+Implementation Notes:
+- Components:
+- Paths:
+- Migrations (if any):
+
+Reviewer Notes:
+- <Reviewer Agent/Model>: agree/disagree (<=200 words)
+- <Reviewer Agent/Model>: agree/disagree (<=200 words)
+
+Final Ruling:
+- Final decision and next steps
+
+7) Memory-bank/daily/LATEST.md
+# Latest Daily Report Pointer
+
+Latest: YYYY-MM-DD
+File: Memory-bank/daily/YYYY-MM-DD.md
+
+Note:
+Daily reports are derived convenience artifacts.
+Authoritative truth remains in project-spec.md and structure/db docs.
+
+8) Memory-bank/daily/YYYY-MM-DD.md (end-of-day report template)
+# End-of-Day Report — YYYY-MM-DD
+
+AUTHOR: <agent/model or human>
+LAST_UPDATED_UTC: YYYY-MM-DD HH:MM
+
+## Work Summary (<= 200 words)
+- ...
+
+## Changes Index (Where to Review)
+### Component: <name>
+- Paths:
+  - ...
+- Symbols / Anchors:
+  - ...
+- Migrations:
+  - ...
+
+## Documentation Updated
+- [ ] project-spec.md (yes/no)
+- [ ] structure-and-db.md (yes/no)
+- [ ] db-schema/*.md (yes/no)
+- [ ] code-tree/*.md (yes/no)
+- [ ] agentsGlobal-memory.md (yes/no)
+- [ ] mastermind.md (yes/no)
+
+## Risks / Gotchas
+- ...
+
+## Next Session Start Here
+1) Read: project-spec.md sections: ...
+2) Read: structure-and-db.md sections: ...
+3) Review: agentsGlobal entries since: <timestamp>
+4) Open tasks: ...
+
+## Open TODOs
+- [ ] ...
+
+9) Memory-bank/db-schema/_TEMPLATE-schema.md (full DB detail per schema)
+# DB Schema — <schema-name>
+
+LAST_UPDATED_UTC: YYYY-MM-DD HH:MM
+UPDATED_BY: <agent/model or human>
+
+## Purpose
+Full table/column inventory for schema: <schema-name>.
+This is used to ground AI agents and reduce hallucination when dealing with Flyway/SQL issues.
+
+## Rules (STRICT)
+- No secrets.
+- Keep tables sorted alphabetically.
+- If Flyway changes schema, update this file in the same session.
+- Use stable types and constraints; avoid vague notes.
+
+## Flyway
+- Latest migration: V__...
+- Migration directory path: <path>
+
+## Tables (Index)
+| Table | Purpose | Primary Key | Notes |
+|---|---|---|---|
+
+## Tables (Full Columns)
+> Format: `table_name | column | type | constraints | description`
+
+### table: <table_name>
+| column | type | constraints | description |
+|---|---|---|---|
+| id | uuid | PK | |
+| ... | ... | ... | |
+
+Constraints / Indexes:
+- ...
+
+Relationships:
+- FK: <table>.<col> -> <table>.<col>
+
+## Update Instructions (STRICT)
+If you:
+- add/drop/rename table/column/index
+- change type/constraint
+- add FK relationships
+Then update:
+- this schema doc
+- structure-and-db.md schema index
+- agentsGlobal entry
+- daily report
+
+10) Memory-bank/code-tree/_TEMPLATE-service-tree.md (deep code tree per service/app)
+# Code Tree — <component-name>
+
+LAST_UPDATED_UTC: YYYY-MM-DD HH:MM
+UPDATED_BY: <agent/model or human>
+
+## Purpose
+Deep structure tree for <component-name> to speed navigation and reduce hallucination.
+This is not a full file dump; list relevant directories and key files.
+
+## Rules (STRICT)
+- No secrets.
+- Keep tree organized and stable.
+- If you add/move/rename key modules, update this file.
+
+## Root Path
+- <repo-relative-path>
+
+## Tree (Key + Deep Where Needed)
+- src/
+  - main/
+    - java/
+      - ...
+    - resources/
+      - db/migration/
+        - ...
+  - test/
+    - ...
+
+## Key Files (Purpose Index)
+| File | Purpose | Notes |
+|---|---|---|
+| ... | ... | ... |
+
+## Update Instructions (STRICT)
+If you:
+- add/remove/rename a module/package
+- introduce a new major folder
+- move core files
+Then update:
+- this file
+- structure-and-db.md inventory if needed
+- agentsGlobal entry
+- daily report
+
+11) Add “enterprise-grade code constraints” for agents (recommended wording)
+
+Place this section in README.md (already included) and optionally repeat in each doc header:
+
+Coding constraints
+
+Prefer composable functions/classes over large files.
+
+Avoid “one giant screen/component/service” files.
+
+Extract shared logic to helpers/services.
+
+Keep code readable: clear naming, single responsibility, small functions.
+
+Avoid unnecessary abstraction, but refactor when files exceed typical limits.
+
+Always consider:
+
+input validation
+
+error handling
+
+logging (structured)
+
+security (no secrets in code)
+
+testability
+
+This is enough to guide agents away from 1500-line files.
+
+Final note on enforcement (practical)
+
+If you want hard enforcement in the team: add a lightweight PR checklist (outside Memory-bank) or a “pre-merge rule” that rejects changes without Memory-bank updates when structure/schema changed. Even without automation, your protocols plus daily report practice will already produce significant improvements.
+
+12) Reusable automation + enforcement pack (recommended for every new project)
+
+For repeatable setup across new backend/frontend/mobile repositories, use:
+
+- `Memory-bank Automation + Guard Setup (universal).md`
+- `mb-init.ps1` (one-command bootstrap script in this same universal folder)
+
+This companion guide defines:
+- required `AGENTS.md` policy contract
+- local git pre-commit guard pattern
+- CI/PR guard (warn mode vs strict block mode)
+- backend/frontend/mobile script blueprints
+- daily retention automation (keep last N daily reports)
+- new-project bootstrap checklist for VS Code + CLI
