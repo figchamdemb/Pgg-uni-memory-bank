@@ -146,6 +146,121 @@ If these steps are not complete, the task is incomplete.
   - `SKIP_MEMORY_BANK_GUARD=1`
 '@
 
+$copilotInstructionsTemplate = @'
+# Copilot Repository Instructions
+
+Follow `AGENTS.md` and treat `Memory-bank/` as mandatory project context.
+
+Before proposing or changing code:
+1. Read `Memory-bank/daily/LATEST.md` and latest daily file.
+2. Read `Memory-bank/project-spec.md`.
+3. Read `Memory-bank/structure-and-db.md`.
+4. Read latest entries in `Memory-bank/agentsGlobal-memory.md`.
+5. Check `Memory-bank/mastermind.md` for open decisions.
+
+If code changes:
+1. Update relevant Memory-bank docs.
+2. Append `Memory-bank/agentsGlobal-memory.md`.
+3. Update `Memory-bank/daily/YYYY-MM-DD.md` and `Memory-bank/daily/LATEST.md`.
+4. If SQL migrations changed, update `Memory-bank/db-schema/*.md`.
+
+Quality constraints:
+- No secrets in code or Memory-bank docs.
+- Keep files modular and maintainable.
+- Screen/page files should stay <= 500 lines where feasible.
+'@
+
+$claudeInstructionsTemplate = @'
+# Claude Repo Instructions
+
+Primary policy file: `AGENTS.md`.
+
+Mandatory start protocol:
+1. `Memory-bank/daily/LATEST.md`
+2. latest daily report
+3. `Memory-bank/project-spec.md`
+4. `Memory-bank/structure-and-db.md`
+5. latest `Memory-bank/agentsGlobal-memory.md` entries
+6. relevant decisions in `Memory-bank/mastermind.md`
+
+Mandatory end protocol for code changes:
+1. Update matching Memory-bank docs (`structure-and-db`, `db-schema`, `code-tree` as needed).
+2. Append `Memory-bank/agentsGlobal-memory.md`.
+3. Update `Memory-bank/daily/YYYY-MM-DD.md` and `Memory-bank/daily/LATEST.md`.
+4. If migration changed, update `Memory-bank/db-schema/*.md`.
+
+Enforcement:
+- Local pre-commit hook runs `scripts/memory_bank_guard.py`.
+- CI guard workflow validates Memory-bank updates on pull requests.
+'@
+
+$clineRulesTemplate = @'
+Follow AGENTS.md in this repository.
+
+Start-of-session (required):
+- Read Memory-bank/daily/LATEST.md and latest daily file.
+- Read Memory-bank/project-spec.md and Memory-bank/structure-and-db.md.
+- Read latest Memory-bank/agentsGlobal-memory.md entries.
+- Check Memory-bank/mastermind.md for open decisions.
+
+End-of-session for code changes (required):
+- Update relevant Memory-bank docs.
+- Append Memory-bank/agentsGlobal-memory.md.
+- Update Memory-bank/daily/YYYY-MM-DD.md and Memory-bank/daily/LATEST.md.
+- If db migration changed, update Memory-bank/db-schema/*.md.
+
+Never add secrets to code or Memory-bank docs.
+'@
+
+$geminiInstructionsTemplate = @'
+# Gemini Repo Instructions
+
+Use `AGENTS.md` as the primary policy contract for this repository.
+
+Mandatory start-of-session:
+1. Read `Memory-bank/daily/LATEST.md` and the latest daily report.
+2. Read `Memory-bank/project-spec.md`.
+3. Read `Memory-bank/structure-and-db.md`.
+4. Read latest entries in `Memory-bank/agentsGlobal-memory.md`.
+5. Check `Memory-bank/mastermind.md` for open decisions.
+
+Mandatory end-of-session when code changed:
+1. Update relevant Memory-bank docs (`structure-and-db`, `db-schema`, `code-tree`).
+2. Append `Memory-bank/agentsGlobal-memory.md`.
+3. Update `Memory-bank/daily/YYYY-MM-DD.md`.
+4. Update `Memory-bank/daily/LATEST.md`.
+
+Rules:
+- Never add secrets to Memory-bank or code.
+- If SQL migrations change, update `Memory-bank/db-schema/*.md` in the same session.
+- Respect local hook and CI Memory-bank guards.
+'@
+
+$antigravityInstructionsTemplate = @'
+# Antigravity Repo Instructions
+
+Follow repository policy from `AGENTS.md`.
+
+Before coding:
+- Read Memory-bank context:
+  - `Memory-bank/daily/LATEST.md` and latest daily report
+  - `Memory-bank/project-spec.md`
+  - `Memory-bank/structure-and-db.md`
+  - latest `Memory-bank/agentsGlobal-memory.md` entries
+  - relevant `Memory-bank/mastermind.md` decisions
+
+After coding:
+- Update matching Memory-bank docs.
+- Append `Memory-bank/agentsGlobal-memory.md`.
+- Update today's `Memory-bank/daily/YYYY-MM-DD.md`.
+- Update `Memory-bank/daily/LATEST.md`.
+- If migration files changed, update `Memory-bank/db-schema/*.md`.
+
+Enforcement:
+- local: `.githooks/pre-commit` -> `scripts/memory_bank_guard.py`
+- PR: `.github/workflows/memory-bank-guard.yml`
+'@
+
 $mbReadmeTemplate = @'
 # Memory-bank - Universal Standard
 
@@ -1198,6 +1313,11 @@ jobs:
 
 $files = @(
     @{ Path = "AGENTS.md"; Content = $agentsTemplate; LfOnly = $false },
+    @{ Path = ".github/copilot-instructions.md"; Content = $copilotInstructionsTemplate; LfOnly = $false },
+    @{ Path = "CLAUDE.md"; Content = $claudeInstructionsTemplate; LfOnly = $false },
+    @{ Path = ".clinerules"; Content = $clineRulesTemplate; LfOnly = $false },
+    @{ Path = "GEMINI.md"; Content = $geminiInstructionsTemplate; LfOnly = $false },
+    @{ Path = "ANTIGRAVITY.md"; Content = $antigravityInstructionsTemplate; LfOnly = $false },
     @{ Path = "Memory-bank\README.md"; Content = $mbReadmeTemplate; LfOnly = $false },
     @{ Path = "Memory-bank\project-spec.md"; Content = $projectSpecTemplate; LfOnly = $false },
     @{ Path = "Memory-bank\project-details.md"; Content = $projectDetailsTemplate; LfOnly = $false },

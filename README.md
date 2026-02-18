@@ -5,6 +5,12 @@ One-command Memory-bank bootstrap for backend, frontend, and mobile repositories
 This kit installs:
 - `Memory-bank/` durable docs
 - `AGENTS.md` start/end enforcement contract
+- cross-agent instruction files:
+  - `.github/copilot-instructions.md`
+  - `.clinerules`
+  - `CLAUDE.md`
+  - `GEMINI.md`
+  - `ANTIGRAVITY.md`
 - pre-commit guard + CI guard
 - summary/generator scripts
 
