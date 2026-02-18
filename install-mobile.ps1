@@ -7,20 +7,47 @@ param(
     [int]$DailyKeepDays = 7,
     [switch]$SkipHookInstall,
     [switch]$Force,
-    [string]$RawBaseUrl = "https://raw.githubusercontent.com/figchamdemb/Pgg-uni-memory-bank/main"
+    [string]$RepoSlug = "figchamdemb/Pgg-uni-memory-bank",
+    [string]$Ref = "main",
+    [string]$RawMbInitUrl = ""
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$tmp = Join-Path $env:TEMP ("mb-install-from-github-" + [Guid]::NewGuid().ToString("N") + ".ps1")
-Invoke-WebRequest -Uri "$RawBaseUrl/mb-install-from-github.ps1" -OutFile $tmp
+$tmp = Join-Path $env:TEMP ("mb-init-" + [Guid]::NewGuid().ToString("N") + ".ps1")
+
+if (-not [string]::IsNullOrWhiteSpace($RawMbInitUrl)) {
+    Invoke-WebRequest -Uri $RawMbInitUrl -OutFile $tmp
+} else {
+    $gh = (Get-Command gh -ErrorAction SilentlyContinue).Source
+    if (-not $gh) {
+        $ghPath = "C:\Program Files\GitHub CLI\gh.exe"
+        if (Test-Path -LiteralPath $ghPath) {
+            $gh = $ghPath
+        }
+    }
+
+    if (-not $gh) {
+        throw "GitHub CLI not found. Install GitHub CLI or pass -RawMbInitUrl."
+    }
+
+    $apiPath = "/repos/$RepoSlug/contents/mb-init.ps1?ref=$Ref"
+    & $gh api -H "Accept: application/vnd.github.raw" $apiPath > $tmp
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to fetch mb-init.ps1 from $RepoSlug. Check gh auth account and repo access."
+    }
+
+    $firstLine = Get-Content -Path $tmp -TotalCount 1 -ErrorAction SilentlyContinue
+    if ($firstLine -match '^\s*\{') {
+        throw "Downloaded response is not a PowerShell script. Check private repo access for account in gh auth status."
+    }
+}
 
 try {
     $args = @(
         "-ExecutionPolicy", "Bypass",
         "-File", $tmp,
-        "-RawMbInitUrl", "$RawBaseUrl/mb-init.ps1",
         "-TargetRepoPath", $TargetRepoPath,
         "-ProjectType", "mobile",
         "-EnforcementMode", $EnforcementMode,
