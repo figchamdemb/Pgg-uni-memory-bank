@@ -20,7 +20,11 @@ $tmp = Join-Path $env:TEMP ("mb-init-" + [Guid]::NewGuid().ToString("N") + ".ps1
 if (-not [string]::IsNullOrWhiteSpace($RawMbInitUrl)) {
     Invoke-WebRequest -Uri $RawMbInitUrl -OutFile $tmp
 } else {
-    $gh = (Get-Command gh -ErrorAction SilentlyContinue).Source
+    $gh = $null
+    $ghCommand = Get-Command gh -ErrorAction SilentlyContinue
+    if ($ghCommand) {
+        $gh = $ghCommand.Source
+    }
     if (-not $gh) {
         $ghPath = "C:\Program Files\GitHub CLI\gh.exe"
         if (Test-Path -LiteralPath $ghPath) {
