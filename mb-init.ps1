@@ -111,7 +111,7 @@ $agentsTemplate = @'
 This repository requires `Memory-bank/` updates for every coding session.
 
 ## Mandatory Start Protocol
-0. Run `powershell -ExecutionPolicy Bypass -File scripts/start_memory_bank_session.ps1`.
+0. Run `.\pg.ps1 start -Yes` (or `powershell -ExecutionPolicy Bypass -File scripts/start_memory_bank_session.ps1`).
 1. Read `Memory-bank/daily/LATEST.md`.
 2. Read the latest daily report referenced there.
 3. Read `Memory-bank/project-spec.md`.
@@ -148,7 +148,12 @@ If these steps are not complete, the task is incomplete.
 
 ## Commands
 - Start session (required before coding):
+  - `.\pg.ps1 start -Yes`
   - `powershell -ExecutionPolicy Bypass -File scripts/start_memory_bank_session.ps1`
+- End session:
+  - `.\pg.ps1 end -Note "finished for today"`
+- Session status:
+  - `.\pg.ps1 status`
 - Install hooks:
   - `powershell -ExecutionPolicy Bypass -File scripts/install_memory_bank_hooks.ps1 -Mode __ENFORCEMENT_MODE__`
 - Optional bypass (emergency only):
@@ -161,7 +166,7 @@ $copilotInstructionsTemplate = @'
 Follow `AGENTS.md` and treat `Memory-bank/` as mandatory project context.
 
 Before proposing or changing code:
-0. Run `powershell -ExecutionPolicy Bypass -File scripts/start_memory_bank_session.ps1`.
+0. Run `.\pg.ps1 start -Yes`.
 1. Read `Memory-bank/daily/LATEST.md` and latest daily file.
 2. Read `Memory-bank/project-spec.md`.
 3. Read `Memory-bank/structure-and-db.md`.
@@ -186,7 +191,7 @@ $claudeInstructionsTemplate = @'
 Primary policy file: `AGENTS.md`.
 
 Mandatory start protocol:
-0. `powershell -ExecutionPolicy Bypass -File scripts/start_memory_bank_session.ps1`
+0. `.\pg.ps1 start -Yes`
 1. `Memory-bank/daily/LATEST.md`
 2. latest daily report
 3. `Memory-bank/project-spec.md`
@@ -209,7 +214,7 @@ $clineRulesTemplate = @'
 Follow AGENTS.md in this repository.
 
 Start-of-session (required):
-- Run `powershell -ExecutionPolicy Bypass -File scripts/start_memory_bank_session.ps1`.
+- Run `.\pg.ps1 start -Yes`.
 - Read Memory-bank/daily/LATEST.md and latest daily file.
 - Read Memory-bank/project-spec.md and Memory-bank/structure-and-db.md.
 - Read latest Memory-bank/agentsGlobal-memory.md entries.
@@ -230,7 +235,7 @@ $geminiInstructionsTemplate = @'
 Use `AGENTS.md` as the primary policy contract for this repository.
 
 Mandatory start-of-session:
-0. Run `powershell -ExecutionPolicy Bypass -File scripts/start_memory_bank_session.ps1`.
+0. Run `.\pg.ps1 start -Yes`.
 1. Read `Memory-bank/daily/LATEST.md` and the latest daily report.
 2. Read `Memory-bank/project-spec.md`.
 3. Read `Memory-bank/structure-and-db.md`.
@@ -255,7 +260,7 @@ $antigravityInstructionsTemplate = @'
 Follow repository policy from `AGENTS.md`.
 
 Before coding:
-- Run `powershell -ExecutionPolicy Bypass -File scripts/start_memory_bank_session.ps1`.
+- Run `.\pg.ps1 start -Yes`.
 - Read Memory-bank context:
   - `Memory-bank/daily/LATEST.md` and latest daily report
   - `Memory-bank/project-spec.md`
@@ -367,6 +372,12 @@ Update this whenever runtime, dependencies, or service startup commands change.
 
 ## Core Start Commands
 ### Project bootstrap
+- Simple command (recommended):
+  - `.\pg.ps1 start -Yes`
+- End shift/session:
+  - `.\pg.ps1 end -Note "finished for today"`
+- Session status:
+  - `.\pg.ps1 status`
 - Start session (required before coding):
   - `powershell -ExecutionPolicy Bypass -File scripts/start_memory_bank_session.ps1`
 - Build summary:
@@ -671,6 +682,7 @@ PROJECT_TYPE: __PROJECT_TYPE__
 - Guard script: `scripts/memory_bank_guard.py`
 - Installer: `scripts/install_memory_bank_hooks.ps1`
 - Session script: `scripts/start_memory_bank_session.ps1`
+- Simple CLI wrapper: `pg.ps1` / `pg.cmd`
 - Session limits: max `__SESSION_MAX_COMMITS__` commits, max `__SESSION_MAX_HOURS__` hours per session
 
 ## Switch Mode
@@ -885,7 +897,7 @@ def commits_since_anchor(anchor: str) -> int | None:
 def validate_session() -> list[str]:
     errors: list[str] = []
     state = load_session_state()
-    command = "powershell -ExecutionPolicy Bypass -File scripts/start_memory_bank_session.ps1"
+    command = ".\\pg.ps1 start -Yes"
 
     if not state:
         errors.append(
@@ -1016,7 +1028,7 @@ def main() -> int:
             print(f"{idx}. {warning}")
 
     print("\nQuick fix:")
-    print("0) powershell -ExecutionPolicy Bypass -File scripts/start_memory_bank_session.ps1")
+    print("0) .\\pg.ps1 start -Yes")
     print("1) python scripts/__BUILD_SCRIPT__")
     print("2) python scripts/generate_memory_bank.py --profile __PROJECT_TYPE__ --keep-days __DAILY_KEEP_DAYS__")
     print("3) stage Memory-bank updates and commit again")
@@ -1436,6 +1448,336 @@ python "scripts/start_memory_bank_session.py" \
   $yes_flag
 '@
 
+$endSessionPyTemplate = @'
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import json
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+MEMORY_BANK = ROOT / "Memory-bank"
+GENERATED_DIR = MEMORY_BANK / "_generated"
+DAILY_DIR = MEMORY_BANK / "daily"
+SESSION_PATH = GENERATED_DIR / "session-state.json"
+LAST_SESSION_PATH = GENERATED_DIR / "last-session.json"
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="End Memory-bank session")
+    parser.add_argument("--author", default="agent")
+    parser.add_argument("--note", default="")
+    parser.add_argument("--keep-state", action="store_true")
+    return parser.parse_args()
+
+
+def ensure_daily(day: str, now_utc: str) -> Path:
+    DAILY_DIR.mkdir(parents=True, exist_ok=True)
+    daily_file = DAILY_DIR / f"{day}.md"
+    if not daily_file.exists():
+        daily_file.write_text(
+            (
+                f"# End-of-Day Report - {day}\n\n"
+                f"AUTHOR: session-end\n"
+                f"LAST_UPDATED_UTC: {now_utc}\n\n"
+                "## Work Summary\n"
+                "- Session ended.\n"
+            ),
+            encoding="utf-8",
+        )
+    latest = DAILY_DIR / "LATEST.md"
+    latest.write_text(
+        (
+            "# Latest Daily Report Pointer\n\n"
+            f"Latest: {day}\n"
+            f"File: Memory-bank/daily/{day}.md\n"
+        ),
+        encoding="utf-8",
+    )
+    return daily_file
+
+
+def append_session_event(daily_file: Path, now_utc: str, author: str, note: str) -> None:
+    existing = daily_file.read_text(encoding="utf-8")
+    if "## Session Events" not in existing:
+        existing = existing.rstrip() + "\n\n## Session Events\n"
+    line = f"- [{now_utc} UTC] Session ended by `{author}`"
+    if note.strip():
+        line += f" - {note.strip()}"
+    daily_file.write_text(existing.rstrip() + "\n" + line + "\n", encoding="utf-8")
+
+
+def main() -> int:
+    args = parse_args()
+    now = dt.datetime.now(dt.timezone.utc)
+    now_iso = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+    now_utc = now.strftime("%Y-%m-%d %H:%M")
+    day = now.strftime("%Y-%m-%d")
+
+    GENERATED_DIR.mkdir(parents=True, exist_ok=True)
+    MEMORY_BANK.mkdir(parents=True, exist_ok=True)
+
+    state: dict = {}
+    if SESSION_PATH.exists():
+        try:
+            state = json.loads(SESSION_PATH.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            state = {}
+
+    state["ended_at_utc"] = now_iso
+    state["ended_by"] = args.author
+    state["end_note"] = args.note
+
+    LAST_SESSION_PATH.write_text(json.dumps(state, indent=2), encoding="utf-8")
+
+    daily_file = ensure_daily(day, now_utc)
+    append_session_event(daily_file, now_utc, args.author, args.note)
+
+    if SESSION_PATH.exists() and not args.keep_state:
+        SESSION_PATH.unlink(missing_ok=True)
+
+    print("Memory-bank session ended.")
+    print(f"- last_session: {LAST_SESSION_PATH.relative_to(ROOT)}")
+    if not args.keep_state:
+        print("- session-state: closed")
+    else:
+        print("- session-state: kept (--keep-state)")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+'@
+
+$endSessionPsTemplate = @'
+param(
+    [string]$Author = "agent",
+    [string]$Note = "",
+    [switch]$SkipRefresh,
+    [switch]$KeepState
+)
+
+$ErrorActionPreference = "Stop"
+$repoRoot = Split-Path -Parent $PSScriptRoot
+
+Push-Location $repoRoot
+try {
+    if (-not $SkipRefresh.IsPresent) {
+        & python "scripts/__BUILD_SCRIPT__"
+        if ($LASTEXITCODE -ne 0) {
+            throw "__BUILD_SCRIPT__ failed. Aborting session end."
+        }
+
+        & python "scripts/generate_memory_bank.py" "--profile" "__PROJECT_TYPE__" "--keep-days" "__DAILY_KEEP_DAYS__"
+        if ($LASTEXITCODE -ne 0) {
+            throw "generate_memory_bank.py failed. Aborting session end."
+        }
+    }
+
+    $argsList = @(
+        "scripts/end_memory_bank_session.py",
+        "--author", "$Author"
+    )
+    if ($Note -ne "") {
+        $argsList += @("--note", "$Note")
+    }
+    if ($KeepState.IsPresent) {
+        $argsList += "--keep-state"
+    }
+
+    & python @argsList
+    if ($LASTEXITCODE -ne 0) {
+        throw "end_memory_bank_session.py failed."
+    }
+}
+finally {
+    Pop-Location
+}
+'@
+
+$sessionStatusPyTemplate = @'
+from __future__ import annotations
+
+import datetime as dt
+import json
+import subprocess
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+STATE_PATH = ROOT / "Memory-bank" / "_generated" / "session-state.json"
+
+
+def run_git(args: list[str]) -> str:
+    result = subprocess.run(
+        ["git", *args],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        return ""
+    return result.stdout.strip()
+
+
+def parse_iso_utc(value: str | None) -> dt.datetime | None:
+    if not value:
+        return None
+    normalized = value.strip().replace("Z", "+00:00")
+    try:
+        parsed = dt.datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=dt.UTC)
+    return parsed.astimezone(dt.UTC)
+
+
+def commits_since_anchor(anchor: str) -> int | None:
+    if not anchor:
+        return 0
+    head = run_git(["rev-parse", "HEAD"]).strip()
+    if not head:
+        return 0
+    if head == anchor:
+        return 0
+    if not run_git(["rev-parse", "--verify", anchor]).strip():
+        return None
+    out = run_git(["rev-list", "--count", f"{anchor}..HEAD"]).strip()
+    if not out:
+        return None
+    try:
+        return int(out)
+    except ValueError:
+        return None
+
+
+def main() -> int:
+    if not STATE_PATH.exists():
+        print("Session status: NONE")
+        print("Run: .\\pg.ps1 start -Yes")
+        return 1
+
+    try:
+        state = json.loads(STATE_PATH.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        print("Session status: INVALID (JSON parse error)")
+        return 2
+
+    started_at = parse_iso_utc(str(state.get("started_at_utc", "")).strip())
+    expires_at = parse_iso_utc(str(state.get("expires_at_utc", "")).strip())
+    max_commits = int(state.get("max_commits", __SESSION_MAX_COMMITS__))
+    anchor = str(state.get("anchor_commit", "")).strip()
+    commits_used = commits_since_anchor(anchor)
+
+    print("Session status: ACTIVE")
+    print(f"- state_file: {STATE_PATH.relative_to(ROOT)}")
+    if started_at:
+        age_hours = (dt.datetime.now(dt.UTC) - started_at).total_seconds() / 3600.0
+        print(f"- started_at_utc: {started_at.strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"- age_hours: {age_hours:.2f}")
+    if expires_at:
+        print(f"- expires_at_utc: {expires_at.strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"- max_commits: {max_commits}")
+    if commits_used is None:
+        print("- commits_used: unknown (anchor not found)")
+    else:
+        remaining = max_commits - commits_used
+        print(f"- commits_used: {commits_used}")
+        print(f"- commits_remaining: {remaining}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+'@
+
+$pgScriptTemplate = @'
+param(
+    [Parameter(Position = 0)]
+    [ValidateSet("start", "end", "status", "help")]
+    [string]$Command = "help",
+
+    [ValidateRange(1, 1000)]
+    [int]$MaxCommits = __SESSION_MAX_COMMITS__,
+
+    [ValidateRange(1, 168)]
+    [int]$MaxHours = __SESSION_MAX_HOURS__,
+
+    [string]$Author = "agent",
+    [string]$Note = "",
+    [switch]$Yes,
+    [switch]$SkipRefresh
+)
+
+$ErrorActionPreference = "Stop"
+
+function Show-Help {
+    Write-Host "pg command usage:"
+    Write-Host "  .\pg.ps1 start -Yes"
+    Write-Host "  .\pg.ps1 end -Note ""finished for today"""
+    Write-Host "  .\pg.ps1 status"
+}
+
+$scriptDir = $PSScriptRoot
+
+switch ($Command) {
+    "start" {
+        $args = @{
+            MaxCommits = $MaxCommits
+            MaxHours = $MaxHours
+            Author = $Author
+            SkipRefresh = $SkipRefresh.IsPresent
+        }
+        if ($Yes.IsPresent) {
+            $args["Yes"] = $true
+        }
+        & (Join-Path $scriptDir "start_memory_bank_session.ps1") @args
+        exit $LASTEXITCODE
+    }
+    "end" {
+        $args = @{
+            Author = $Author
+            Note = $Note
+            SkipRefresh = $SkipRefresh.IsPresent
+        }
+        & (Join-Path $scriptDir "end_memory_bank_session.ps1") @args
+        exit $LASTEXITCODE
+    }
+    "status" {
+        & python (Join-Path $scriptDir "session_status.py")
+        exit $LASTEXITCODE
+    }
+    default {
+        Show-Help
+        exit 0
+    }
+}
+'@
+
+$pgRootPsTemplate = @'
+param(
+    [Parameter(ValueFromRemainingArguments = $true)]
+    [string[]]$Arguments
+)
+
+$ErrorActionPreference = "Stop"
+$scriptPath = Join-Path $PSScriptRoot "scripts\pg.ps1"
+
+if (-not (Test-Path -LiteralPath $scriptPath)) {
+    throw "Missing command script: $scriptPath"
+}
+
+& powershell -ExecutionPolicy Bypass -File $scriptPath @Arguments
+exit $LASTEXITCODE
+'@
+
+$pgRootCmdTemplate = @'
+@echo off
+powershell -ExecutionPolicy Bypass -File "%~dp0scripts\pg.ps1" %*
+'@
+
 $generateTemplate = @'
 from __future__ import annotations
 
@@ -1810,6 +2152,12 @@ $files = @(
     @{ Path = "scripts\start_memory_bank_session.py"; Content = $startSessionPyTemplate; LfOnly = $true },
     @{ Path = "scripts\start_memory_bank_session.ps1"; Content = $startSessionPsTemplate; LfOnly = $false },
     @{ Path = "scripts\start_memory_bank_session.sh"; Content = $startSessionShTemplate; LfOnly = $true },
+    @{ Path = "scripts\end_memory_bank_session.py"; Content = $endSessionPyTemplate; LfOnly = $true },
+    @{ Path = "scripts\end_memory_bank_session.ps1"; Content = $endSessionPsTemplate; LfOnly = $false },
+    @{ Path = "scripts\session_status.py"; Content = $sessionStatusPyTemplate; LfOnly = $true },
+    @{ Path = "scripts\pg.ps1"; Content = $pgScriptTemplate; LfOnly = $false },
+    @{ Path = "pg.ps1"; Content = $pgRootPsTemplate; LfOnly = $false },
+    @{ Path = "pg.cmd"; Content = $pgRootCmdTemplate; LfOnly = $false },
     @{ Path = ".githooks\pre-commit"; Content = $preCommitTemplate; LfOnly = $true },
     @{ Path = "scripts\generate_memory_bank.py"; Content = $generateTemplate; LfOnly = $true },
     @{ Path = ("scripts\" + $buildScriptName); Content = $buildSummaryTemplate; LfOnly = $true },
@@ -1856,7 +2204,7 @@ Write-Host "Files overwritten: $script:overwriteCount"
 Write-Host "Files skipped: $script:skipCount"
 Write-Host ""
 Write-Host "Next commands:"
-Write-Host "1) powershell -ExecutionPolicy Bypass -File scripts/start_memory_bank_session.ps1"
-Write-Host "2) python scripts/$buildScriptName"
-Write-Host "3) python scripts/generate_memory_bank.py --profile $ProjectType --keep-days $DailyKeepDays"
+Write-Host "1) .\pg.ps1 start -Yes"
+Write-Host "2) .\pg.ps1 status"
+Write-Host "3) .\pg.ps1 end -Note ""finished for today"""
 Write-Host "4) git add . && git commit -m ""chore: initialize memory-bank enforcement"""

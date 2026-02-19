@@ -113,12 +113,17 @@ powershell -ExecutionPolicy Bypass -File $tmp `
 - `scripts/build_<project>_summary.py`
 - `scripts/start_memory_bank_session.py`
 - `scripts/start_memory_bank_session.ps1`
+- `scripts/end_memory_bank_session.py`
+- `scripts/end_memory_bank_session.ps1`
+- `scripts/session_status.py`
+- `scripts/pg.ps1`
+- root `pg.ps1` and `pg.cmd`
 - `.githooks/pre-commit`
 - `.github/workflows/memory-bank-guard.yml`
 
 ## Extra Enforcement Included
 - Session must be started before coding:
-  - `powershell -ExecutionPolicy Bypass -File scripts/start_memory_bank_session.ps1`
+  - `.\pg.ps1 start -Yes`
 - Guard checks session-state freshness:
   - max 5 commits per session (default)
   - max 12 hours per session (default)
@@ -127,6 +132,12 @@ powershell -ExecutionPolicy Bypass -File $tmp `
   - `warn` mode: warning only
   - `strict` mode: commit/PR fails
 - Tooling/runtime/start command changes require `Memory-bank/tools-and-commands.md` update.
+
+## Daily Commands for Developers (simple)
+From repo root:
+- Start: `.\pg.ps1 start -Yes`
+- Status: `.\pg.ps1 status`
+- End: `.\pg.ps1 end -Note "finished for today"`
 
 ## Team Policy
 For consistency across agents (Codex/Claude/Copilot):

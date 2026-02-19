@@ -18,6 +18,7 @@ Default mode is `warn` so teams can stabilize before switching to strict blockin
 
 New in this version:
 - one-command session bootstrap: `scripts/start_memory_bank_session.ps1`
+- simple CLI wrapper: `pg.ps1` / `pg.cmd`
 - session enforcement in guard:
   - session must be started
   - session expires after `12` hours (default)
@@ -53,16 +54,22 @@ powershell -ExecutionPolicy Bypass -File $tmp -TargetRepoPath (Get-Location).Pat
 
 ## Start Every Session (required)
 
-Run this one command in the target repo before coding:
+Run this one simple command in the target repo before coding:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/start_memory_bank_session.ps1
+.\pg.ps1 start -Yes
 ```
 
-Non-interactive mode:
+End shift:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/start_memory_bank_session.ps1 -Yes
+.\pg.ps1 end -Note "finished for today"
+```
+
+Session status:
+
+```powershell
+.\pg.ps1 status
 ```
 
 This command:

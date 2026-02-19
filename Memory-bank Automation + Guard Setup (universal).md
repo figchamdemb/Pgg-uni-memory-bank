@@ -19,6 +19,9 @@ This guide is reusable for:
 2. `AGENTS.md` (agent behavior contract)
 3. `scripts/` (generation + guard scripts)
    - include `start_memory_bank_session.ps1`
+   - include `end_memory_bank_session.ps1`
+   - include `session_status.py`
+   - include `pg.ps1`
 4. `.githooks/pre-commit` (local enforcement)
 5. `.github/workflows/memory-bank-guard.yml` (PR enforcement)
 
@@ -82,7 +85,9 @@ Run in repository root (once per repo):
 3. Verify:
    - `git config --get core.hooksPath` -> `.githooks`
 4. Start coding session (required):
-   - `powershell -ExecutionPolicy Bypass -File scripts/start_memory_bank_session.ps1`
+   - `.\pg.ps1 start -Yes`
+5. Optional day-close:
+   - `.\pg.ps1 end -Note "finished for today"`
 
 Important:
 - Git hooks are per-repository (`.git/config`), not global by default.
@@ -306,9 +311,10 @@ Optional env override:
 1. `python scripts/build_<domain>_summary.py`
 2. `python scripts/generate_memory_bank.py`
 3. `powershell -ExecutionPolicy Bypass -File scripts/install_memory_bank_hooks.ps1` (or bash installer)
-4. `powershell -ExecutionPolicy Bypass -File scripts/start_memory_bank_session.ps1`
+4. `.\pg.ps1 start -Yes`
 5. Commit
-6. PR -> CI guard validates Memory-bank policy
+6. `.\pg.ps1 end -Note "finished for today"` (recommended at shift end)
+7. PR -> CI guard validates Memory-bank policy
 
 ---
 
