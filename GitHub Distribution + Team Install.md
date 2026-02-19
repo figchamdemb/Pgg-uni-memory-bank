@@ -11,6 +11,8 @@ Create a dedicated repo, for example:
 - `egov-memory-bank-standard`
 
 Put these files at repo root:
+- `NON_TECHNICAL_QUICKSTART.md`
+- `TROUBLESHOOTING.md`
 - `pg-install.ps1`
 - `pg.ps1`
 - `mb-init.ps1`

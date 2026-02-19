@@ -2,7 +2,12 @@
 
 One-command Memory-bank bootstrap for backend, frontend, and mobile repositories.
 
-This kit installs:
+## Quick Links
+- Non-technical setup: `NON_TECHNICAL_QUICKSTART.md`
+- Error guide: `TROUBLESHOOTING.md`
+- Team distribution: `GitHub Distribution + Team Install.md`
+
+## What This Installs
 - `Memory-bank/` durable docs
 - `AGENTS.md` start/end enforcement contract
 - cross-agent instruction files:
@@ -16,20 +21,19 @@ This kit installs:
 
 Default mode is `warn` so teams can stabilize before switching to strict blocking.
 
-New in this version:
-- one-time global CLI installer: `pg-install.ps1`
-- global command after install: `pg install`, `pg start`, `pg end`, `pg status`
-- one-command session bootstrap: `scripts/start_memory_bank_session.ps1`
-- simple CLI wrapper: `pg.ps1` / `pg.cmd`
-- session enforcement in guard:
-  - session must be started
-  - session expires after `12` hours (default)
-  - session expires after `5` commits from anchor (default)
-  - session policy is blocking even in `warn` mode
-- nested monorepo-safe hook installation (`core.hooksPath` is set correctly even when target is a subfolder)
+## Terminal and Permissions
+- You can run this from VS Code terminal or external terminal.
+- Normal user permissions are enough for `pg` commands.
+- Admin is only needed if your machine policy blocks `winget` or app install.
+- If VS Code does not detect new PATH after install, close and reopen VS Code terminal.
 
-## One-Time Global CLI Setup (recommended)
-Run once on each developer machine:
+## Setup Order
+1. One-time per machine: install global `pg` command.
+2. One-time per repo: run `pg install backend|frontend|mobile`.
+3. Every work session: run `pg start -Yes` before coding, and `pg end` when done.
+
+## One-Time Global CLI Setup
+Run once on each developer machine (PowerShell):
 
 ```powershell
 $gh = (Get-Command gh -ErrorAction SilentlyContinue).Source
@@ -47,88 +51,78 @@ $tmp = Join-Path $env:TEMP "pg-install.ps1"
 powershell -ExecutionPolicy Bypass -File $tmp
 ```
 
-After this, you can use `pg` directly (no `.\`).
+Verify:
 
-## Install Commands (after global setup)
-Run in target repo root:
+```powershell
+pg version
+```
 
-### Backend
+## Repo Install Commands
+Run in target repo root.
+
+Backend:
+
 ```powershell
 pg install backend
 ```
 
-### Frontend
+Frontend:
+
 ```powershell
 pg install frontend
 ```
 
-### Mobile
+Mobile:
+
 ```powershell
 pg install mobile
 ```
 
-Optional:
-- `pg install backend --mode warn --keep-days 7`
-- `pg install backend --target C:\path\to\repo`
+If terminal is CMD and you need explicit target path:
 
-## Legacy Direct Install Commands (without global setup)
-Run these only if you do not want the global `pg` command.
-
-### Backend
-```powershell
-$u = "https://raw.githubusercontent.com/figchamdemb/Pgg-uni-memory-bank/main/install-backend.ps1"
-$tmp = Join-Path $env:TEMP "install-backend.ps1"
-Invoke-WebRequest -Uri $u -OutFile $tmp
-powershell -ExecutionPolicy Bypass -File $tmp -TargetRepoPath (Get-Location).Path
+```bat
+pg install backend --target "%CD%"
 ```
 
-### Frontend
+If terminal is PowerShell and you need explicit target path:
+
 ```powershell
-$u = "https://raw.githubusercontent.com/figchamdemb/Pgg-uni-memory-bank/main/install-frontend.ps1"
-$tmp = Join-Path $env:TEMP "install-frontend.ps1"
-Invoke-WebRequest -Uri $u -OutFile $tmp
-powershell -ExecutionPolicy Bypass -File $tmp -TargetRepoPath (Get-Location).Path
+pg install backend --target (Get-Location).Path
 ```
 
-### Mobile
-```powershell
-$u = "https://raw.githubusercontent.com/figchamdemb/Pgg-uni-memory-bank/main/install-mobile.ps1"
-$tmp = Join-Path $env:TEMP "install-mobile.ps1"
-Invoke-WebRequest -Uri $u -OutFile $tmp
-powershell -ExecutionPolicy Bypass -File $tmp -TargetRepoPath (Get-Location).Path
+Cross-shell safe option:
+
+```bat
+pg install backend --target .
 ```
 
-## Start Every Session (required)
-
-Run this in the target repo before coding:
+## Daily Session Commands
+Run in target repo root before coding:
 
 ```powershell
 pg start -Yes
 ```
 
-End shift:
-
-```powershell
-pg end -Note "finished for today"
-```
-
-Session status:
+Status:
 
 ```powershell
 pg status
 ```
 
-From outside repo root, you can target explicitly:
+End of shift:
 
 ```powershell
-pg start --target C:\path\to\repo -Yes
+pg end -Note "finished for today"
 ```
 
-This command:
-- refreshes summary + memory docs
-- updates `daily/LATEST.md`
-- writes `Memory-bank/_generated/session-state.json`
-- sets session budget used by guard
+Important:
+- `pg install` is not a daily command.
+- Use `pg install` only first time per repo or when refreshing templates.
+
+## LLM Workflow Clarification
+- Best practice: you run `pg start -Yes` in terminal first, then use your AI chat.
+- At end, run `pg end ...` in terminal before final summary or commit.
+- If your agent has terminal execution access, it can run these commands too.
 
 ## Enforcement Highlights
 - Start-of-session: agent reads latest Memory-bank context before coding.
@@ -140,18 +134,13 @@ This command:
 
 ## Switch to Strict Later
 Local repo:
+
 ```powershell
 git config memorybank.mode strict
 ```
 
 CI:
 - set repo variable `MB_ENFORCEMENT_MODE=strict`
-
-## Standards Included
-- `Memory-bank/coding-security-standards.md`
-- `Memory-bank/tools-and-commands.md`
-- `Memory-bank/project-details.md` for active plan/feature tracking
-- `Memory-bank/mastermind.md` for options, debate, vote, final ruling
 
 ## Notes
 - No secrets in Memory-bank.
