@@ -17,6 +17,8 @@ This kit installs:
 Default mode is `warn` so teams can stabilize before switching to strict blocking.
 
 New in this version:
+- one-time global CLI installer: `pg-install.ps1`
+- global command after install: `pg install`, `pg start`, `pg end`, `pg status`
 - one-command session bootstrap: `scripts/start_memory_bank_session.ps1`
 - simple CLI wrapper: `pg.ps1` / `pg.cmd`
 - session enforcement in guard:
@@ -26,7 +28,51 @@ New in this version:
   - session policy is blocking even in `warn` mode
 - nested monorepo-safe hook installation (`core.hooksPath` is set correctly even when target is a subfolder)
 
-## Install Commands (run in target repo root in VS Code terminal)
+## One-Time Global CLI Setup (recommended)
+Run once on each developer machine:
+
+```powershell
+$gh = (Get-Command gh -ErrorAction SilentlyContinue).Source
+if (-not $gh) {
+  winget install --id GitHub.cli -e
+  Write-Host "Restart terminal, then run this command again."
+  return
+}
+& $gh auth status
+if ($LASTEXITCODE -ne 0) { & $gh auth login --web --git-protocol https --hostname github.com }
+
+$repo = "figchamdemb/Pgg-uni-memory-bank"
+$tmp = Join-Path $env:TEMP "pg-install.ps1"
+& $gh api -H "Accept: application/vnd.github.raw" "/repos/$repo/contents/pg-install.ps1?ref=main" > $tmp
+powershell -ExecutionPolicy Bypass -File $tmp
+```
+
+After this, you can use `pg` directly (no `.\`).
+
+## Install Commands (after global setup)
+Run in target repo root:
+
+### Backend
+```powershell
+pg install backend
+```
+
+### Frontend
+```powershell
+pg install frontend
+```
+
+### Mobile
+```powershell
+pg install mobile
+```
+
+Optional:
+- `pg install backend --mode warn --keep-days 7`
+- `pg install backend --target C:\path\to\repo`
+
+## Legacy Direct Install Commands (without global setup)
+Run these only if you do not want the global `pg` command.
 
 ### Backend
 ```powershell
@@ -54,22 +100,28 @@ powershell -ExecutionPolicy Bypass -File $tmp -TargetRepoPath (Get-Location).Pat
 
 ## Start Every Session (required)
 
-Run this one simple command in the target repo before coding:
+Run this in the target repo before coding:
 
 ```powershell
-.\pg.ps1 start -Yes
+pg start -Yes
 ```
 
 End shift:
 
 ```powershell
-.\pg.ps1 end -Note "finished for today"
+pg end -Note "finished for today"
 ```
 
 Session status:
 
 ```powershell
-.\pg.ps1 status
+pg status
+```
+
+From outside repo root, you can target explicitly:
+
+```powershell
+pg start --target C:\path\to\repo -Yes
 ```
 
 This command:

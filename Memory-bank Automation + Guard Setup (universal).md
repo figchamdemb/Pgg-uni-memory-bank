@@ -85,9 +85,11 @@ Run in repository root (once per repo):
 3. Verify:
    - `git config --get core.hooksPath` -> `.githooks`
 4. Start coding session (required):
-   - `.\pg.ps1 start -Yes`
+   - `pg start -Yes` (if global CLI installed)
+   - or `.\pg.ps1 start -Yes`
 5. Optional day-close:
-   - `.\pg.ps1 end -Note "finished for today"`
+   - `pg end -Note "finished for today"` (if global CLI installed)
+   - or `.\pg.ps1 end -Note "finished for today"`
 
 Important:
 - Git hooks are per-repository (`.git/config`), not global by default.
@@ -311,9 +313,9 @@ Optional env override:
 1. `python scripts/build_<domain>_summary.py`
 2. `python scripts/generate_memory_bank.py`
 3. `powershell -ExecutionPolicy Bypass -File scripts/install_memory_bank_hooks.ps1` (or bash installer)
-4. `.\pg.ps1 start -Yes`
+4. `pg start -Yes` (or `.\pg.ps1 start -Yes`)
 5. Commit
-6. `.\pg.ps1 end -Note "finished for today"` (recommended at shift end)
+6. `pg end -Note "finished for today"` (or `.\pg.ps1 end -Note "finished for today"`) (recommended at shift end)
 7. PR -> CI guard validates Memory-bank policy
 
 ---

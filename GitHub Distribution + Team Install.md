@@ -11,6 +11,8 @@ Create a dedicated repo, for example:
 - `egov-memory-bank-standard`
 
 Put these files at repo root:
+- `pg-install.ps1`
+- `pg.ps1`
 - `mb-init.ps1`
 - `mb-install-from-github.ps1`
 - `install-backend.ps1`
@@ -52,29 +54,45 @@ Replace:
 - `<REPO>` with your standard repo name
 - `<BRANCH>` with `main` (or your default branch)
 
+## One-Time Global `pg` Command Setup (recommended)
+Run once per machine:
+
+```powershell
+$gh = (Get-Command gh -ErrorAction SilentlyContinue).Source
+if (-not $gh) { winget install --id GitHub.cli -e; return }
+& $gh auth status
+if ($LASTEXITCODE -ne 0) { & $gh auth login --web --git-protocol https --hostname github.com }
+
+$repo = "<ORG>/<REPO>"
+$tmp = Join-Path $env:TEMP "pg-install.ps1"
+& $gh api -H "Accept: application/vnd.github.raw" "/repos/$repo/contents/pg-install.ps1?ref=<BRANCH>" > $tmp
+powershell -ExecutionPolicy Bypass -File $tmp -RepoSlug $repo -Ref "<BRANCH>"
+```
+
+Then usage is short:
+
+```powershell
+pg install backend
+cd C:\path\to\target-repo
+pg start -Yes
+pg status
+pg end -Note "finished for today"
+```
+
 ## One Command Per Project Type (recommended)
 Backend:
 ```powershell
-$u = "https://raw.githubusercontent.com/<ORG>/<REPO>/main/install-backend.ps1"
-$tmp = Join-Path $env:TEMP "install-backend.ps1"
-Invoke-WebRequest -Uri $u -OutFile $tmp
-powershell -ExecutionPolicy Bypass -File $tmp -TargetRepoPath (Get-Location).Path
+pg install backend
 ```
 
 Frontend:
 ```powershell
-$u = "https://raw.githubusercontent.com/<ORG>/<REPO>/main/install-frontend.ps1"
-$tmp = Join-Path $env:TEMP "install-frontend.ps1"
-Invoke-WebRequest -Uri $u -OutFile $tmp
-powershell -ExecutionPolicy Bypass -File $tmp -TargetRepoPath (Get-Location).Path
+pg install frontend
 ```
 
 Mobile:
 ```powershell
-$u = "https://raw.githubusercontent.com/<ORG>/<REPO>/main/install-mobile.ps1"
-$tmp = Join-Path $env:TEMP "install-mobile.ps1"
-Invoke-WebRequest -Uri $u -OutFile $tmp
-powershell -ExecutionPolicy Bypass -File $tmp -TargetRepoPath (Get-Location).Path
+pg install mobile
 ```
 
 ## Optional Wrapper Install (same flow, more reusable)
@@ -123,7 +141,7 @@ powershell -ExecutionPolicy Bypass -File $tmp `
 
 ## Extra Enforcement Included
 - Session must be started before coding:
-  - `.\pg.ps1 start -Yes`
+  - `pg start -Yes`
 - Guard checks session-state freshness:
   - max 5 commits per session (default)
   - max 12 hours per session (default)
@@ -135,9 +153,9 @@ powershell -ExecutionPolicy Bypass -File $tmp `
 
 ## Daily Commands for Developers (simple)
 From repo root:
-- Start: `.\pg.ps1 start -Yes`
-- Status: `.\pg.ps1 status`
-- End: `.\pg.ps1 end -Note "finished for today"`
+- Start: `pg start -Yes`
+- Status: `pg status`
+- End: `pg end -Note "finished for today"`
 
 ## Team Policy
 For consistency across agents (Codex/Claude/Copilot):
