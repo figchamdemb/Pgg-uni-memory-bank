@@ -111,10 +111,17 @@ powershell -ExecutionPolicy Bypass -File $tmp `
 - `scripts/memory_bank_guard.py`
 - `scripts/generate_memory_bank.py`
 - `scripts/build_<project>_summary.py`
+- `scripts/start_memory_bank_session.py`
+- `scripts/start_memory_bank_session.ps1`
 - `.githooks/pre-commit`
 - `.github/workflows/memory-bank-guard.yml`
 
 ## Extra Enforcement Included
+- Session must be started before coding:
+  - `powershell -ExecutionPolicy Bypass -File scripts/start_memory_bank_session.ps1`
+- Guard checks session-state freshness:
+  - max 5 commits per session (default)
+  - max 12 hours per session (default)
 - Screen/Page files above 500 lines are flagged by guard and CI.
   - `warn` mode: warning only
   - `strict` mode: commit/PR fails
@@ -126,3 +133,9 @@ For consistency across agents (Codex/Claude/Copilot):
 2. Every code task starts by reading Memory-bank files.
 3. Every code task ends by updating Memory-bank before summary.
 4. Keep mode `warn` until team is stable, then flip to `strict`.
+
+## Monorepo / Branch Notes
+- If your backend is a subfolder inside a larger git repo, install with:
+  - `-TargetRepoPath <subfolder path>`
+- Hook installer now sets `core.hooksPath` to the correct relative subfolder path.
+- You can run on any branch (`main`, `police`, feature branches). It updates the same branch state, no separate Memory-bank is required unless you intentionally use a different target folder.

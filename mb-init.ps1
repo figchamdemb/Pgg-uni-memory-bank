@@ -7,6 +7,10 @@ param(
     [string]$EnforcementMode = "warn",
     [ValidateRange(1, 365)]
     [int]$DailyKeepDays = 7,
+    [ValidateRange(1, 100)]
+    [int]$SessionMaxCommits = 5,
+    [ValidateRange(1, 168)]
+    [int]$SessionMaxHours = 12,
     [switch]$SkipHookInstall,
     [switch]$Force
 )
@@ -44,6 +48,8 @@ function Apply-Tokens {
     $result = $result.Replace("__PROJECT_TYPE__", $ProjectType)
     $result = $result.Replace("__ENFORCEMENT_MODE__", $EnforcementMode)
     $result = $result.Replace("__DAILY_KEEP_DAYS__", [string]$DailyKeepDays)
+    $result = $result.Replace("__SESSION_MAX_COMMITS__", [string]$SessionMaxCommits)
+    $result = $result.Replace("__SESSION_MAX_HOURS__", [string]$SessionMaxHours)
     $result = $result.Replace("__BUILD_SCRIPT__", $buildScriptName)
     return $result
 }
@@ -105,6 +111,7 @@ $agentsTemplate = @'
 This repository requires `Memory-bank/` updates for every coding session.
 
 ## Mandatory Start Protocol
+0. Run `powershell -ExecutionPolicy Bypass -File scripts/start_memory_bank_session.ps1`.
 1. Read `Memory-bank/daily/LATEST.md`.
 2. Read the latest daily report referenced there.
 3. Read `Memory-bank/project-spec.md`.
@@ -140,6 +147,8 @@ If these steps are not complete, the task is incomplete.
   - max 500 lines for `screen/page` files (warn in warn mode, fail in strict mode).
 
 ## Commands
+- Start session (required before coding):
+  - `powershell -ExecutionPolicy Bypass -File scripts/start_memory_bank_session.ps1`
 - Install hooks:
   - `powershell -ExecutionPolicy Bypass -File scripts/install_memory_bank_hooks.ps1 -Mode __ENFORCEMENT_MODE__`
 - Optional bypass (emergency only):
@@ -152,6 +161,7 @@ $copilotInstructionsTemplate = @'
 Follow `AGENTS.md` and treat `Memory-bank/` as mandatory project context.
 
 Before proposing or changing code:
+0. Run `powershell -ExecutionPolicy Bypass -File scripts/start_memory_bank_session.ps1`.
 1. Read `Memory-bank/daily/LATEST.md` and latest daily file.
 2. Read `Memory-bank/project-spec.md`.
 3. Read `Memory-bank/structure-and-db.md`.
@@ -176,6 +186,7 @@ $claudeInstructionsTemplate = @'
 Primary policy file: `AGENTS.md`.
 
 Mandatory start protocol:
+0. `powershell -ExecutionPolicy Bypass -File scripts/start_memory_bank_session.ps1`
 1. `Memory-bank/daily/LATEST.md`
 2. latest daily report
 3. `Memory-bank/project-spec.md`
@@ -198,6 +209,7 @@ $clineRulesTemplate = @'
 Follow AGENTS.md in this repository.
 
 Start-of-session (required):
+- Run `powershell -ExecutionPolicy Bypass -File scripts/start_memory_bank_session.ps1`.
 - Read Memory-bank/daily/LATEST.md and latest daily file.
 - Read Memory-bank/project-spec.md and Memory-bank/structure-and-db.md.
 - Read latest Memory-bank/agentsGlobal-memory.md entries.
@@ -218,6 +230,7 @@ $geminiInstructionsTemplate = @'
 Use `AGENTS.md` as the primary policy contract for this repository.
 
 Mandatory start-of-session:
+0. Run `powershell -ExecutionPolicy Bypass -File scripts/start_memory_bank_session.ps1`.
 1. Read `Memory-bank/daily/LATEST.md` and the latest daily report.
 2. Read `Memory-bank/project-spec.md`.
 3. Read `Memory-bank/structure-and-db.md`.
@@ -242,6 +255,7 @@ $antigravityInstructionsTemplate = @'
 Follow repository policy from `AGENTS.md`.
 
 Before coding:
+- Run `powershell -ExecutionPolicy Bypass -File scripts/start_memory_bank_session.ps1`.
 - Read Memory-bank context:
   - `Memory-bank/daily/LATEST.md` and latest daily report
   - `Memory-bank/project-spec.md`
@@ -353,6 +367,8 @@ Update this whenever runtime, dependencies, or service startup commands change.
 
 ## Core Start Commands
 ### Project bootstrap
+- Start session (required before coding):
+  - `powershell -ExecutionPolicy Bypass -File scripts/start_memory_bank_session.ps1`
 - Build summary:
   - `python scripts/__BUILD_SCRIPT__`
 - Generate/update memory bank:
@@ -654,6 +670,8 @@ PROJECT_TYPE: __PROJECT_TYPE__
 - Hook path: `.githooks`
 - Guard script: `scripts/memory_bank_guard.py`
 - Installer: `scripts/install_memory_bank_hooks.ps1`
+- Session script: `scripts/start_memory_bank_session.ps1`
+- Session limits: max `__SESSION_MAX_COMMITS__` commits, max `__SESSION_MAX_HOURS__` hours per session
 
 ## Switch Mode
 - Local repo:
@@ -668,6 +686,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import json
 import os
 import subprocess
 import sys
@@ -677,6 +696,9 @@ ROOT = Path(__file__).resolve().parents[1]
 MEMORY_BANK = ROOT / "Memory-bank"
 DEFAULT_MODE = "__ENFORCEMENT_MODE__"
 DEFAULT_PROFILE = "__PROJECT_TYPE__"
+SESSION_STATE = MEMORY_BANK / "_generated" / "session-state.json"
+DEFAULT_MAX_SESSION_COMMITS = __SESSION_MAX_COMMITS__
+DEFAULT_MAX_SESSION_HOURS = __SESSION_MAX_HOURS__
 
 COMMON_CODE_EXT = {
     ".java", ".kt", ".kts", ".xml", ".yml", ".yaml", ".properties", ".sql",
@@ -734,7 +756,8 @@ def staged_files() -> list[str]:
     out = run_git(["diff", "--cached", "--name-only", "--diff-filter=ACMR"])
     if not out:
         return []
-    return [line.strip().replace("\\", "/") for line in out.splitlines() if line.strip()]
+    staged = [line.strip().replace("\\", "/") for line in out.splitlines() if line.strip()]
+    return [path for path in staged if not path.startswith("../")]
 
 
 def is_code_change(path: str) -> bool:
@@ -794,6 +817,102 @@ def today_utc() -> str:
     return dt.datetime.now(dt.UTC).strftime("%Y-%m-%d")
 
 
+def parse_iso_utc(value: str | None) -> dt.datetime | None:
+    if not value:
+        return None
+    normalized = value.strip().replace("Z", "+00:00")
+    try:
+        parsed = dt.datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=dt.UTC)
+    return parsed.astimezone(dt.UTC)
+
+
+def load_session_state() -> dict:
+    if not SESSION_STATE.exists():
+        return {}
+    try:
+        return json.loads(SESSION_STATE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def parse_positive_int(value: object, default: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    if parsed < 1:
+        return default
+    return parsed
+
+
+def commits_since_anchor(anchor: str) -> int | None:
+    if not anchor:
+        return 0
+    head = run_git(["rev-parse", "HEAD"]).strip()
+    if not head:
+        return 0
+    if head == anchor:
+        return 0
+    if not run_git(["rev-parse", "--verify", anchor]).strip():
+        return None
+    out = run_git(["rev-list", "--count", f"{anchor}..HEAD"]).strip()
+    if not out:
+        return None
+    try:
+        return int(out)
+    except ValueError:
+        return None
+
+
+def validate_session() -> list[str]:
+    errors: list[str] = []
+    state = load_session_state()
+    command = "powershell -ExecutionPolicy Bypass -File scripts/start_memory_bank_session.ps1"
+
+    if not state:
+        errors.append(
+            "Session is not started. Run start session command before coding:\n"
+            f"- {command}"
+        )
+        return errors
+
+    started_at = parse_iso_utc(str(state.get("started_at_utc", "")).strip())
+    if started_at is None:
+        errors.append(
+            "Session state is invalid (missing/invalid started_at_utc). Re-run:\n"
+            f"- {command}"
+        )
+        return errors
+
+    max_hours = parse_positive_int(state.get("max_hours"), DEFAULT_MAX_SESSION_HOURS)
+    age_hours = (dt.datetime.now(dt.UTC) - started_at).total_seconds() / 3600.0
+    if age_hours > max_hours:
+        errors.append(
+            f"Session is stale ({age_hours:.1f}h old, limit {max_hours}h). Re-run:\n"
+            f"- {command}"
+        )
+
+    anchor = str(state.get("anchor_commit", "")).strip()
+    max_commits = parse_positive_int(state.get("max_commits"), DEFAULT_MAX_SESSION_COMMITS)
+    commits_used = commits_since_anchor(anchor)
+    if commits_used is None:
+        errors.append(
+            "Session anchor commit is invalid (history changed). Re-run:\n"
+            f"- {command}"
+        )
+    elif commits_used >= max_commits:
+        errors.append(
+            f"Session commit budget reached ({commits_used}/{max_commits}). Re-run:\n"
+            f"- {command}"
+        )
+
+    return errors
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Memory-bank pre-commit guard")
     parser.add_argument("--mode", choices=("warn", "strict"), default=None)
@@ -824,6 +943,8 @@ def main() -> int:
     tooling_changes = [p for p in staged if is_tooling_change(p)]
     errors: list[str] = []
     warnings: list[str] = []
+
+    errors.extend(validate_session())
 
     if not any(p.startswith("Memory-bank/") for p in staged):
         errors.append("Code changed but no Memory-bank file is staged.")
@@ -881,6 +1002,7 @@ def main() -> int:
             print(f"{idx}. {warning}")
 
     print("\nQuick fix:")
+    print("0) powershell -ExecutionPolicy Bypass -File scripts/start_memory_bank_session.ps1")
     print("1) python scripts/__BUILD_SCRIPT__")
     print("2) python scripts/generate_memory_bank.py --profile __PROJECT_TYPE__ --keep-days __DAILY_KEEP_DAYS__")
     print("3) stage Memory-bank updates and commit again")
@@ -905,36 +1027,76 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$repoRoot = Split-Path -Parent $PSScriptRoot
-$hooksDir = Join-Path $repoRoot ".githooks"
+$projectRoot = Split-Path -Parent $PSScriptRoot
+$hooksDir = Join-Path $projectRoot ".githooks"
 $preCommitPath = Join-Path $hooksDir "pre-commit"
+$guardScriptPath = Join-Path $projectRoot "scripts/memory_bank_guard.py"
 
-if (-not (Test-Path -LiteralPath $preCommitPath)) {
-    if (-not $Force) {
-        throw "Missing hook file: $preCommitPath. Re-run with -Force to create it."
+function Get-RelativePath {
+    param(
+        [Parameter(Mandatory = $true)][string]$BasePath,
+        [Parameter(Mandatory = $true)][string]$TargetPath
+    )
+
+    $baseFull = [System.IO.Path]::GetFullPath($BasePath)
+    if (-not $baseFull.EndsWith([System.IO.Path]::DirectorySeparatorChar)) {
+        $baseFull += [System.IO.Path]::DirectorySeparatorChar
     }
 
-    New-Item -ItemType Directory -Path $hooksDir -Force | Out-Null
-    $hookContent = @"
+    $targetFull = [System.IO.Path]::GetFullPath($TargetPath)
+    $baseUri = New-Object System.Uri($baseFull)
+    $targetUri = New-Object System.Uri($targetFull)
+    $relativeUri = $baseUri.MakeRelativeUri($targetUri)
+    return [System.Uri]::UnescapeDataString($relativeUri.ToString())
+}
+
+$gitTopLevel = & git -C $projectRoot rev-parse --show-toplevel 2>$null
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($gitTopLevel)) {
+    throw "Could not resolve git top-level from: $projectRoot"
+}
+$gitTopLevel = $gitTopLevel.Trim()
+
+$hooksPathRelative = (Get-RelativePath -BasePath $gitTopLevel -TargetPath $hooksDir).Replace("\", "/")
+$guardPathRelative = (Get-RelativePath -BasePath $gitTopLevel -TargetPath $guardScriptPath).Replace("\", "/")
+if ([string]::IsNullOrWhiteSpace($hooksPathRelative) -or $hooksPathRelative -eq ".") {
+    $hooksPathRelative = ".githooks"
+}
+
+New-Item -ItemType Directory -Path $hooksDir -Force | Out-Null
+
+$hookTemplate = @"
 #!/usr/bin/env bash
 set -euo pipefail
 
-python scripts/memory_bank_guard.py
+repo_root="$(git rev-parse --show-toplevel)"
+python "$repo_root/__GUARD_PATH__"
 "@
+$hookContent = $hookTemplate.Replace("__GUARD_PATH__", $guardPathRelative)
+
+if (-not (Test-Path -LiteralPath $preCommitPath) -or $Force) {
     [System.IO.File]::WriteAllText($preCommitPath, ($hookContent -replace "`r`n", "`n"), [System.Text.UTF8Encoding]::new($false))
+    Write-Host "Wrote pre-commit hook: $preCommitPath"
+} else {
+    $existing = [System.IO.File]::ReadAllText($preCommitPath, [System.Text.Encoding]::UTF8)
+    if (($existing -replace "`r`n", "`n") -ne ($hookContent -replace "`r`n", "`n")) {
+        [System.IO.File]::WriteAllText($preCommitPath, ($hookContent -replace "`r`n", "`n"), [System.Text.UTF8Encoding]::new($false))
+        Write-Host "Updated pre-commit hook: $preCommitPath"
+    } else {
+        Write-Host "Pre-commit hook already up to date: $preCommitPath"
+    }
 }
 
-& git -C $repoRoot config core.hooksPath .githooks
+& git -C $gitTopLevel config core.hooksPath $hooksPathRelative
 if ($LASTEXITCODE -ne 0) {
-    throw "Failed to set core.hooksPath to .githooks"
+    throw "Failed to set core.hooksPath to $hooksPathRelative"
 }
 
-& git -C $repoRoot config memorybank.mode $Mode
+& git -C $gitTopLevel config memorybank.mode $Mode
 if ($LASTEXITCODE -ne 0) {
     throw "Failed to set memorybank.mode to $Mode"
 }
 
-Write-Host "Configured core.hooksPath=.githooks"
+Write-Host "Configured core.hooksPath=$hooksPathRelative"
 Write-Host "Configured memorybank.mode=$Mode"
 '@
 
@@ -948,11 +1110,45 @@ if [[ "$mode" != "warn" && "$mode" != "strict" ]]; then
   exit 1
 fi
 
-repo_root="$(cd "$(dirname "$0")/.." && pwd)"
-git -C "$repo_root" config core.hooksPath .githooks
-git -C "$repo_root" config memorybank.mode "$mode"
+project_root="$(cd "$(dirname "$0")/.." && pwd)"
+git_root="$(git -C "$project_root" rev-parse --show-toplevel)"
+hooks_dir="$project_root/.githooks"
+guard_script="$project_root/scripts/memory_bank_guard.py"
 
-echo "Configured core.hooksPath=.githooks"
+mkdir -p "$hooks_dir"
+
+if command -v python3 >/dev/null 2>&1; then
+  pybin="python3"
+else
+  pybin="python"
+fi
+
+guard_rel="$(python - <<PY
+import os
+print(os.path.relpath(r"$guard_script", r"$git_root").replace("\\\\", "/"))
+PY
+)"
+
+hooks_rel="$(python - <<PY
+import os
+print(os.path.relpath(r"$hooks_dir", r"$git_root").replace("\\\\", "/"))
+PY
+)"
+
+cat > "$hooks_dir/pre-commit" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="\$(git rev-parse --show-toplevel)"
+$pybin "\$repo_root/$guard_rel"
+EOF
+
+chmod +x "$hooks_dir/pre-commit"
+
+git -C "$git_root" config core.hooksPath "$hooks_rel"
+git -C "$git_root" config memorybank.mode "$mode"
+
+echo "Configured core.hooksPath=$hooks_rel"
 echo "Configured memorybank.mode=$mode"
 '@
 
@@ -960,7 +1156,266 @@ $preCommitTemplate = @'
 #!/usr/bin/env bash
 set -euo pipefail
 
-python scripts/memory_bank_guard.py
+hook_dir="$(cd "$(dirname "$0")" && pwd)"
+if command -v python3 >/dev/null 2>&1; then
+  pybin="python3"
+else
+  pybin="python"
+fi
+
+"$pybin" "$hook_dir/../scripts/memory_bank_guard.py"
+'@
+
+$startSessionPyTemplate = @'
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+MEMORY_BANK = ROOT / "Memory-bank"
+DAILY_DIR = MEMORY_BANK / "daily"
+GENERATED_DIR = MEMORY_BANK / "_generated"
+DEFAULT_PROFILE = "__PROJECT_TYPE__"
+DEFAULT_KEEP_DAYS = __DAILY_KEEP_DAYS__
+DEFAULT_MAX_COMMITS = __SESSION_MAX_COMMITS__
+DEFAULT_MAX_HOURS = __SESSION_MAX_HOURS__
+
+START_DOCS = [
+    "Memory-bank/daily/LATEST.md",
+    "Memory-bank/project-spec.md",
+    "Memory-bank/project-details.md",
+    "Memory-bank/structure-and-db.md",
+    "Memory-bank/tools-and-commands.md",
+    "Memory-bank/agentsGlobal-memory.md",
+    "Memory-bank/mastermind.md",
+]
+
+
+def run_git(args: list[str]) -> str:
+    result = subprocess.run(
+        ["git", *args],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        return ""
+    return result.stdout.strip()
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Start Memory-bank session")
+    parser.add_argument("--profile", default=DEFAULT_PROFILE, choices=("backend", "frontend", "mobile"))
+    parser.add_argument("--max-commits", type=int, default=DEFAULT_MAX_COMMITS)
+    parser.add_argument("--max-hours", type=int, default=DEFAULT_MAX_HOURS)
+    parser.add_argument("--author", default="agent")
+    parser.add_argument("--ack-read", action="store_true", help="Non-interactive read acknowledgment")
+    return parser.parse_args()
+
+
+def ensure_daily(day: str, now_utc: str) -> None:
+    DAILY_DIR.mkdir(parents=True, exist_ok=True)
+    today_file = DAILY_DIR / f"{day}.md"
+    if not today_file.exists():
+        today_file.write_text(
+            (
+                f"# End-of-Day Report - {day}\n\n"
+                f"AUTHOR: session-start\n"
+                f"LAST_UPDATED_UTC: {now_utc}\n\n"
+                "## Work Summary\n"
+                "- Session initialized.\n\n"
+                "## Documentation Updated\n"
+                "- [ ] agentsGlobal-memory.md\n"
+                "- [ ] daily/LATEST.md\n"
+            ),
+            encoding="utf-8",
+        )
+    latest_file = DAILY_DIR / "LATEST.md"
+    latest_file.write_text(
+        (
+            "# Latest Daily Report Pointer\n\n"
+            f"Latest: {day}\n"
+            f"File: Memory-bank/daily/{day}.md\n"
+        ),
+        encoding="utf-8",
+    )
+
+
+def confirm_read(assume_yes: bool) -> bool:
+    print("Read these before coding:")
+    for doc in START_DOCS:
+        print(f"- {doc}")
+    if assume_yes:
+        return True
+    try:
+        answer = input("Type 'yes' to confirm you will read/start from these docs: ").strip().lower()
+    except EOFError:
+        return False
+    return answer in {"y", "yes"}
+
+
+def main() -> int:
+    args = parse_args()
+    now = dt.datetime.now(dt.timezone.utc)
+    day = now.strftime("%Y-%m-%d")
+    now_utc = now.strftime("%Y-%m-%d %H:%M")
+
+    if args.max_commits < 1:
+        print("max-commits must be >= 1")
+        return 1
+    if args.max_hours < 1:
+        print("max-hours must be >= 1")
+        return 1
+
+    if not confirm_read(args.ack_read):
+        print("Session start cancelled. Memory-bank read acknowledgment is required.")
+        return 1
+
+    MEMORY_BANK.mkdir(parents=True, exist_ok=True)
+    GENERATED_DIR.mkdir(parents=True, exist_ok=True)
+    ensure_daily(day, now_utc)
+
+    anchor_commit = run_git(["rev-parse", "HEAD"])
+    expires_at = (now + dt.timedelta(hours=args.max_hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    state = {
+        "started_at_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "expires_at_utc": expires_at,
+        "profile": args.profile,
+        "author": args.author,
+        "max_commits": args.max_commits,
+        "max_hours": args.max_hours,
+        "anchor_commit": anchor_commit,
+        "required_start_docs": START_DOCS,
+        "daily_keep_days": DEFAULT_KEEP_DAYS,
+    }
+    session_path = GENERATED_DIR / "session-state.json"
+    session_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+
+    print("Memory-bank session started.")
+    print(f"- state: {session_path.relative_to(ROOT)}")
+    print(f"- expires_utc: {expires_at}")
+    print(f"- commit_budget: {args.max_commits}")
+    print("- next: start coding, then keep Memory-bank docs updated before commit")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+'@
+
+$startSessionPsTemplate = @'
+param(
+    [ValidateRange(1, 1000)]
+    [int]$MaxCommits = __SESSION_MAX_COMMITS__,
+    [ValidateRange(1, 168)]
+    [int]$MaxHours = __SESSION_MAX_HOURS__,
+    [string]$Author = "agent",
+    [switch]$Yes,
+    [switch]$SkipRefresh
+)
+
+$ErrorActionPreference = "Stop"
+$repoRoot = Split-Path -Parent $PSScriptRoot
+
+Push-Location $repoRoot
+try {
+    if (-not $SkipRefresh.IsPresent) {
+        & python "scripts/__BUILD_SCRIPT__"
+        if ($LASTEXITCODE -ne 0) {
+            throw "__BUILD_SCRIPT__ failed. Aborting session start."
+        }
+
+        & python "scripts/generate_memory_bank.py" "--profile" "__PROJECT_TYPE__" "--keep-days" "__DAILY_KEEP_DAYS__"
+        if ($LASTEXITCODE -ne 0) {
+            throw "generate_memory_bank.py failed. Aborting session start."
+        }
+    }
+
+    $argsList = @(
+        "scripts/start_memory_bank_session.py",
+        "--profile", "__PROJECT_TYPE__",
+        "--max-commits", "$MaxCommits",
+        "--max-hours", "$MaxHours",
+        "--author", "$Author"
+    )
+    if ($Yes.IsPresent) {
+        $argsList += "--ack-read"
+    }
+
+    & python @argsList
+    if ($LASTEXITCODE -ne 0) {
+        throw "start_memory_bank_session.py failed."
+    }
+
+    Write-Host "Session bootstrap complete."
+    Write-Host "Mode: __ENFORCEMENT_MODE__"
+    Write-Host "Commit budget: $MaxCommits"
+    Write-Host "Hour budget: $MaxHours"
+}
+finally {
+    Pop-Location
+}
+'@
+
+$startSessionShTemplate = @'
+#!/usr/bin/env bash
+set -euo pipefail
+
+max_commits="${MB_SESSION_MAX_COMMITS:-__SESSION_MAX_COMMITS__}"
+max_hours="${MB_SESSION_MAX_HOURS:-__SESSION_MAX_HOURS__}"
+author="${MB_SESSION_AUTHOR:-agent}"
+yes_flag=""
+skip_refresh="0"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --yes)
+      yes_flag="--ack-read"
+      shift
+      ;;
+    --skip-refresh)
+      skip_refresh="1"
+      shift
+      ;;
+    --max-commits)
+      max_commits="$2"
+      shift 2
+      ;;
+    --max-hours)
+      max_hours="$2"
+      shift 2
+      ;;
+    --author)
+      author="$2"
+      shift 2
+      ;;
+    *)
+      echo "Unknown option: $1"
+      exit 1
+      ;;
+  esac
+done
+
+repo_root="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$repo_root"
+
+if [[ "$skip_refresh" != "1" ]]; then
+  python "scripts/__BUILD_SCRIPT__"
+  python "scripts/generate_memory_bank.py" --profile "__PROJECT_TYPE__" --keep-days "__DAILY_KEEP_DAYS__"
+fi
+
+python "scripts/start_memory_bank_session.py" \
+  --profile "__PROJECT_TYPE__" \
+  --max-commits "$max_commits" \
+  --max-hours "$max_hours" \
+  --author "$author" \
+  $yes_flag
 '@
 
 $generateTemplate = @'
@@ -1334,6 +1789,9 @@ $files = @(
     @{ Path = "scripts\memory_bank_guard.py"; Content = $guardTemplate; LfOnly = $true },
     @{ Path = "scripts\install_memory_bank_hooks.ps1"; Content = $hookInstallPsTemplate; LfOnly = $false },
     @{ Path = "scripts\install_memory_bank_hooks.sh"; Content = $hookInstallShTemplate; LfOnly = $true },
+    @{ Path = "scripts\start_memory_bank_session.py"; Content = $startSessionPyTemplate; LfOnly = $true },
+    @{ Path = "scripts\start_memory_bank_session.ps1"; Content = $startSessionPsTemplate; LfOnly = $false },
+    @{ Path = "scripts\start_memory_bank_session.sh"; Content = $startSessionShTemplate; LfOnly = $true },
     @{ Path = ".githooks\pre-commit"; Content = $preCommitTemplate; LfOnly = $true },
     @{ Path = "scripts\generate_memory_bank.py"; Content = $generateTemplate; LfOnly = $true },
     @{ Path = ("scripts\" + $buildScriptName); Content = $buildSummaryTemplate; LfOnly = $true },
@@ -1349,8 +1807,13 @@ foreach ($item in $files) {
     Write-ManagedFile -Path $destination -Content $content -LfOnly:$lfOnly
 }
 
-$isGitRepo = Test-Path -LiteralPath (Join-Path $repoRoot ".git")
-if ($shouldInstallHooks -and $isGitRepo) {
+$insideGitWorkTree = $false
+& git -C $repoRoot rev-parse --is-inside-work-tree *> $null
+if ($LASTEXITCODE -eq 0) {
+    $insideGitWorkTree = $true
+}
+
+if ($shouldInstallHooks -and $insideGitWorkTree) {
     $installer = Join-Path $repoRoot "scripts\install_memory_bank_hooks.ps1"
     if ($Force.IsPresent) {
         & powershell -ExecutionPolicy Bypass -File $installer -Mode $EnforcementMode -Force
@@ -1360,8 +1823,8 @@ if ($shouldInstallHooks -and $isGitRepo) {
     if ($LASTEXITCODE -ne 0) {
         throw "Hook installation failed with exit code $LASTEXITCODE."
     }
-} elseif ($shouldInstallHooks -and -not $isGitRepo) {
-    Write-Warning "Target is not a git repository (.git missing); skipped hook installation."
+} elseif ($shouldInstallHooks -and -not $insideGitWorkTree) {
+    Write-Warning "Target is not inside a git work tree; skipped hook installation."
 }
 
 Write-Host ""
@@ -1375,6 +1838,7 @@ Write-Host "Files overwritten: $script:overwriteCount"
 Write-Host "Files skipped: $script:skipCount"
 Write-Host ""
 Write-Host "Next commands:"
-Write-Host "1) python scripts/$buildScriptName"
-Write-Host "2) python scripts/generate_memory_bank.py --profile $ProjectType --keep-days $DailyKeepDays"
-Write-Host "3) git add . && git commit -m ""chore: initialize memory-bank enforcement"""
+Write-Host "1) powershell -ExecutionPolicy Bypass -File scripts/start_memory_bank_session.ps1"
+Write-Host "2) python scripts/$buildScriptName"
+Write-Host "3) python scripts/generate_memory_bank.py --profile $ProjectType --keep-days $DailyKeepDays"
+Write-Host "4) git add . && git commit -m ""chore: initialize memory-bank enforcement"""

@@ -16,6 +16,14 @@ This kit installs:
 
 Default mode is `warn` so teams can stabilize before switching to strict blocking.
 
+New in this version:
+- one-command session bootstrap: `scripts/start_memory_bank_session.ps1`
+- session enforcement in guard:
+  - session must be started
+  - session expires after `12` hours (default)
+  - session expires after `5` commits from anchor (default)
+- nested monorepo-safe hook installation (`core.hooksPath` is set correctly even when target is a subfolder)
+
 ## Install Commands (run in target repo root in VS Code terminal)
 
 ### Backend
@@ -41,6 +49,26 @@ $tmp = Join-Path $env:TEMP "install-mobile.ps1"
 Invoke-WebRequest -Uri $u -OutFile $tmp
 powershell -ExecutionPolicy Bypass -File $tmp -TargetRepoPath (Get-Location).Path
 ```
+
+## Start Every Session (required)
+
+Run this one command in the target repo before coding:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/start_memory_bank_session.ps1
+```
+
+Non-interactive mode:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/start_memory_bank_session.ps1 -Yes
+```
+
+This command:
+- refreshes summary + memory docs
+- updates `daily/LATEST.md`
+- writes `Memory-bank/_generated/session-state.json`
+- sets session budget used by guard
 
 ## Enforcement Highlights
 - Start-of-session: agent reads latest Memory-bank context before coding.

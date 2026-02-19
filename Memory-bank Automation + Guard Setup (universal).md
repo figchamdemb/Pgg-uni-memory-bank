@@ -18,6 +18,7 @@ This guide is reusable for:
    - include `coding-security-standards.md`
 2. `AGENTS.md` (agent behavior contract)
 3. `scripts/` (generation + guard scripts)
+   - include `start_memory_bank_session.ps1`
 4. `.githooks/pre-commit` (local enforcement)
 5. `.github/workflows/memory-bank-guard.yml` (PR enforcement)
 
@@ -80,6 +81,8 @@ Run in repository root (once per repo):
      - `git config core.hooksPath .githooks`
 3. Verify:
    - `git config --get core.hooksPath` -> `.githooks`
+4. Start coding session (required):
+   - `powershell -ExecutionPolicy Bypass -File scripts/start_memory_bank_session.ps1`
 
 Important:
 - Git hooks are per-repository (`.git/config`), not global by default.
@@ -109,6 +112,9 @@ Use a root-level `AGENTS.md` with these mandatory points:
 Create `scripts/memory_bank_guard.py` that checks staged files.
 
 Minimum checks:
+0. Session state exists and is fresh (`Memory-bank/_generated/session-state.json`).
+   - default: max 5 commits per session
+   - default: max 12 hours per session
 1. If code files changed outside `Memory-bank/`, require staged Memory-bank update.
 2. If migration files changed, require staged `Memory-bank/db-schema/*.md`.
 3. Require staged:
@@ -299,8 +305,9 @@ Optional env override:
 1. `python scripts/build_<domain>_summary.py`
 2. `python scripts/generate_memory_bank.py`
 3. `powershell -ExecutionPolicy Bypass -File scripts/install_memory_bank_hooks.ps1` (or bash installer)
-4. Commit
-5. PR -> CI guard validates Memory-bank policy
+4. `powershell -ExecutionPolicy Bypass -File scripts/start_memory_bank_session.ps1`
+5. Commit
+6. PR -> CI guard validates Memory-bank policy
 
 ---
 
