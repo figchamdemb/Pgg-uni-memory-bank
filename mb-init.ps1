@@ -1696,7 +1696,7 @@ if __name__ == "__main__":
 $pgScriptTemplate = @'
 param(
     [Parameter(Position = 0)]
-    [ValidateSet("start", "end", "status", "help")]
+    [ValidateSet("install", "start", "end", "status", "help")]
     [string]$Command = "help",
 
     [ValidateRange(1, 1000)]
@@ -1708,21 +1708,36 @@ param(
     [string]$Author = "agent",
     [string]$Note = "",
     [switch]$Yes,
-    [switch]$SkipRefresh
+    [switch]$SkipRefresh,
+
+    [Parameter(ValueFromRemainingArguments = $true)]
+    [string[]]$Rest
 )
 
 $ErrorActionPreference = "Stop"
 
 function Show-Help {
     Write-Host "pg command usage:"
+    Write-Host "  .\pg.ps1 install backend"
     Write-Host "  .\pg.ps1 start -Yes"
     Write-Host "  .\pg.ps1 end -Note ""finished for today"""
     Write-Host "  .\pg.ps1 status"
+    Write-Host ""
+    Write-Host "Note: install delegates to global CLI if available (~\.pg-cli\pg.ps1)."
 }
 
 $scriptDir = $PSScriptRoot
 
 switch ($Command) {
+    "install" {
+        $globalPg = Join-Path $HOME ".pg-cli\pg.ps1"
+        if (-not (Test-Path -LiteralPath $globalPg)) {
+            throw "Install command requires global pg CLI. Run pg-install.ps1 once on this machine."
+        }
+        Write-Host "Delegating install to global pg CLI..."
+        & powershell -ExecutionPolicy Bypass -File $globalPg "install" @Rest
+        exit $LASTEXITCODE
+    }
     "start" {
         $args = @{
             MaxCommits = $MaxCommits

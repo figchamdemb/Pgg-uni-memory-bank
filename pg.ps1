@@ -192,7 +192,7 @@ function Invoke-RemoteInstall {
 
     $tmp = Join-Path $env:TEMP ("$installerName-" + [Guid]::NewGuid().ToString("N") + ".ps1")
     try {
-        $apiPath = "/repos/$RepoSlug/contents/$installerName?ref=$Ref"
+        $apiPath = "/repos/$RepoSlug/contents/${installerName}?ref=$Ref"
         & $gh api -H "Accept: application/vnd.github.raw" $apiPath > $tmp
         if ($LASTEXITCODE -ne 0) {
             throw "Failed to download $installerName from $RepoSlug@$Ref"
