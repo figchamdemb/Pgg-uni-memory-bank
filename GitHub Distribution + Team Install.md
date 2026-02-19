@@ -122,6 +122,7 @@ powershell -ExecutionPolicy Bypass -File $tmp `
 - Guard checks session-state freshness:
   - max 5 commits per session (default)
   - max 12 hours per session (default)
+  - this session check is blocking even when mode is `warn`
 - Screen/Page files above 500 lines are flagged by guard and CI.
   - `warn` mode: warning only
   - `strict` mode: commit/PR fails

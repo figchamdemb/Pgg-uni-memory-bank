@@ -22,6 +22,7 @@ New in this version:
   - session must be started
   - session expires after `12` hours (default)
   - session expires after `5` commits from anchor (default)
+  - session policy is blocking even in `warn` mode
 - nested monorepo-safe hook installation (`core.hooksPath` is set correctly even when target is a subfolder)
 
 ## Install Commands (run in target repo root in VS Code terminal)

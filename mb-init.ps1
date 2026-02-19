@@ -943,8 +943,8 @@ def main() -> int:
     tooling_changes = [p for p in staged if is_tooling_change(p)]
     errors: list[str] = []
     warnings: list[str] = []
-
-    errors.extend(validate_session())
+    session_errors = validate_session()
+    errors.extend(session_errors)
 
     if not any(p.startswith("Memory-bank/") for p in staged):
         errors.append("Code changed but no Memory-bank file is staged.")
@@ -1006,6 +1006,10 @@ def main() -> int:
     print("1) python scripts/__BUILD_SCRIPT__")
     print("2) python scripts/generate_memory_bank.py --profile __PROJECT_TYPE__ --keep-days __DAILY_KEEP_DAYS__")
     print("3) stage Memory-bank updates and commit again")
+
+    if session_errors:
+        print("Session policy is blocking in all modes. Start a fresh session first.")
+        return 1
 
     if mode == "strict":
         return 1

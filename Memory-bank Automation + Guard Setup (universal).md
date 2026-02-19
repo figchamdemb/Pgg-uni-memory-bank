@@ -115,6 +115,7 @@ Minimum checks:
 0. Session state exists and is fresh (`Memory-bank/_generated/session-state.json`).
    - default: max 5 commits per session
    - default: max 12 hours per session
+   - this check is blocking in both `warn` and `strict` modes
 1. If code files changed outside `Memory-bank/`, require staged Memory-bank update.
 2. If migration files changed, require staged `Memory-bank/db-schema/*.md`.
 3. Require staged:
