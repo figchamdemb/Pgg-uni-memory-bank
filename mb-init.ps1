@@ -756,8 +756,22 @@ def staged_files() -> list[str]:
     out = run_git(["diff", "--cached", "--name-only", "--diff-filter=ACMR"])
     if not out:
         return []
-    staged = [line.strip().replace("\\", "/") for line in out.splitlines() if line.strip()]
-    return [path for path in staged if not path.startswith("../")]
+    prefix = run_git(["rev-parse", "--show-prefix"]).strip().replace("\\", "/")
+    if prefix and not prefix.endswith("/"):
+        prefix += "/"
+    staged: list[str] = []
+    for raw in out.splitlines():
+        path = raw.strip().replace("\\", "/")
+        if not path:
+            continue
+        if prefix:
+            if not path.startswith(prefix):
+                continue
+            path = path[len(prefix):]
+        if path.startswith("../") or not path:
+            continue
+        staged.append(path)
+    return staged
 
 
 def is_code_change(path: str) -> bool:
